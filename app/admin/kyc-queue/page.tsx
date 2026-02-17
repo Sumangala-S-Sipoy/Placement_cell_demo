@@ -9,6 +9,8 @@ export const metadata: Metadata = {
     description: "Review and approve student KYC verifications",
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function KYCQueuePage() {
     const session = await auth()
 
@@ -43,6 +45,7 @@ export default async function KYCQueuePage() {
                     name: true,
                     email: true,
                     createdAt: true,
+                    document: true, // Include document relation
                 }
             }
         },
@@ -63,6 +66,7 @@ export default async function KYCQueuePage() {
             <KYCVerificationQueue
                 pendingVerifications={pendingVerifications}
                 adminId={session.user.id}
+                publicDomain={process.env.CLOUDFLARE_R2_PUBLIC_DOMAIN}
             />
         </div>
     )

@@ -155,14 +155,16 @@ export const useFileUpload = (
         inputRef.current.value = ""
       }
 
-      const newState = {
+      return {
         ...prev,
         files: [],
         errors: [],
       }
+    })
 
-      onFilesChange?.(newState.files)
-      return newState
+    // Defer callback to after render cycle completes
+    queueMicrotask(() => {
+      onFilesChange?.([])
     })
   }, [onFilesChange])
 
@@ -176,9 +178,9 @@ export const useFileUpload = (
       // Clear existing errors when new files are uploaded
       setState((prev) => ({ ...prev, errors: [] }))
 
-      // In single file mode, clear existing files first
+      // Clean up old files if in single-file mode
       if (!multiple) {
-        clearFiles()
+        // We'll handle cleanup in the main setState below
       }
 
       // Check if adding these files would exceed maxFiles (only in multiple mode)
@@ -236,16 +238,35 @@ export const useFileUpload = (
         // Call the onFilesAdded callback with the newly added valid files
         onFilesAdded?.(validFiles)
 
+        // Capture the calculated files before setState to avoid stale closure
+        const calculatedFiles = !multiple
+          ? validFiles
+          : [...state.files, ...validFiles]
+
         setState((prev) => {
-          const newFiles = !multiple
-            ? validFiles
-            : [...prev.files, ...validFiles]
-          onFilesChange?.(newFiles)
+          // In single-file mode, clean up old files
+          if (!multiple) {
+            prev.files.forEach((file) => {
+              if (
+                file.preview &&
+                file.file instanceof File &&
+                file.file.type.startsWith("image/")
+              ) {
+                URL.revokeObjectURL(file.preview)
+              }
+            })
+          }
+
           return {
             ...prev,
-            files: newFiles,
+            files: calculatedFiles,
             errors,
           }
+        })
+
+        // Defer callback to after render cycle completes
+        queueMicrotask(() => {
+          onFilesChange?.(calculatedFiles)
         })
       } else if (errors.length > 0) {
         setState((prev) => ({
@@ -267,7 +288,6 @@ export const useFileUpload = (
       validateFile,
       createPreview,
       generateUniqueId,
-      clearFiles,
       onFilesChange,
       onFilesAdded,
     ]
@@ -275,6 +295,7 @@ export const useFileUpload = (
 
   const removeFile = useCallback(
     (id: string) => {
+      let newFiles: FileWithPreview[] = []
       setState((prev) => {
         const fileToRemove = prev.files.find((file) => file.id === id)
         if (
@@ -286,14 +307,19 @@ export const useFileUpload = (
           URL.revokeObjectURL(fileToRemove.preview)
         }
 
-        const newFiles = prev.files.filter((file) => file.id !== id)
-        onFilesChange?.(newFiles)
+        const updatedFiles = prev.files.filter((file) => file.id !== id)
+        newFiles = updatedFiles
 
         return {
           ...prev,
-          files: newFiles,
+          files: updatedFiles,
           errors: [],
         }
+      })
+
+      // Defer callback to after render cycle completes
+      queueMicrotask(() => {
+        onFilesChange?.(newFiles)
       })
     },
     [onFilesChange]

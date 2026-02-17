@@ -13,15 +13,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String  @map("provider_account_id")
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
@@ -38,31 +37,25 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime? @map("email_verified")
-  image         String?
-  password      String?
-  role          UserRole  @default(STUDENT)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  accounts Account[]
-  sessions Session[]
-  profile  Profile?
-
-  // Scheduler Relations
-  createdEvents  ScheduleEvent[] @relation("CreatedEvents")
-  eventAttendees EventAttendee[] @relation("EventAttendees")
-
-  // Notification Relations
+  id                String             @id @default(cuid())
+  name              String?
+  email             String             @unique
+  emailVerified     DateTime?          @map("email_verified")
+  image             String?
+  password          String?
+  role              UserRole           @default(STUDENT)
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  accounts          Account[]
+  applications      Application[]
+  document          Document?
+  eventAttendees    EventAttendee[]    @relation("EventAttendees")
   notifications     Notification[]     @relation("UserNotifications")
+  placements        Placement[]
+  profile           Profile?
   pushSubscriptions PushSubscription[]
-
-  // Placement Relations
-  applications Application[]
-  placements   Placement[]
+  createdEvents     ScheduleEvent[]    @relation("CreatedEvents")
+  sessions          Session[]
 
   @@map("users")
 }
@@ -76,7 +69,6 @@ model VerificationToken {
   @@map("verificationtokens")
 }
 
-// Custom Email Verification
 model EmailVerificationToken {
   id        String   @id @default(cuid())
   email     String
@@ -88,259 +80,423 @@ model EmailVerificationToken {
   @@map("email_verification_tokens")
 }
 
-// App-specific Models
 model Profile {
-  id     String @id @default(cuid())
-  userId String @unique @map("user_id")
-
-  // Profile Completion Status
-  isComplete     Boolean @default(false) @map("is_complete")
-  completionStep Int     @default(1) @map("completion_step") // 1-7 for multi-step form
-
-  // 1. Personal Information - Updated field names
-  firstName       String?        @map("first_name")
-  middleName      String?        @map("middle_name")
-  lastName        String?        @map("last_name")
-  dateOfBirth     DateTime?      @map("date_of_birth")
-  dobDay          String?        @map("dob_day") // Day component of date of birth
-  dobMonth        String?        @map("dob_month") // Month component of date of birth
-  dobYear         String?        @map("dob_year") // Year component of date of birth
-  gender          Gender?
-  bloodGroup      BloodGroup?    @map("blood_group")
-  state           String? // State field from personal info form
-  stateOfDomicile String?        @map("state_of_domicile") // Keep for compatibility
-  nationality     String?        @default("INDIAN")
-  category        String? // Category field from personal info form (GEN/OBC/SC/ST)
-  casteCategory   CasteCategory? @map("caste_category") // Keep for compatibility
-  profilePhoto    String?        @map("profile_photo") // URL to uploaded photo
-
-  // 2. Contact & Parent/Guardian Details - Student Contact
-  email             String? // From User model but stored here for completeness
-  studentEmail      String? @map("student_email") // Separate student email field
-  callingMobile     String? @map("calling_mobile")
-  callingNumber     String? @map("calling_number") // Alternative name for calling mobile
-  whatsappMobile    String? @map("whatsapp_mobile")
-  whatsappNumber    String? @map("whatsapp_number") // Alternative name for whatsapp mobile
-  alternativeMobile String? @map("alternative_mobile")
-  altNumber         String? @map("alt_number") // Alternative name for alternative mobile
-
-  // Parent/Guardian Details - Updated field names
-  fatherFirstName  String? @map("father_first_name")
-  fatherMiddleName String? @map("father_middle_name")
-  fatherLastName   String? @map("father_last_name")
-  fatherName       String? @map("father_name") // Computed from first/middle/last
-  fatherDeceased   Boolean @default(false) @map("father_deceased")
-  fatherMobile     String? @map("father_mobile")
-  fatherEmail      String? @map("father_email")
-  fatherOccupation String? @map("father_occupation")
-
-  motherFirstName  String? @map("mother_first_name")
-  motherMiddleName String? @map("mother_middle_name")
-  motherLastName   String? @map("mother_last_name")
-  motherName       String? @map("mother_name") // Computed from first/middle/last
-  motherDeceased   Boolean @default(false) @map("mother_deceased")
-  motherMobile     String? @map("mother_mobile")
-  motherEmail      String? @map("mother_email")
-  motherOccupation String? @map("mother_occupation")
-
-  // 3. Address Information - Updated field names
-  // Current Address
-  currentHouse    String? @map("current_house")
-  currentCross    String? @map("current_cross")
-  currentArea     String? @map("current_area")
-  currentDistrict String? @map("current_district")
-  currentCity     String? @map("current_city")
-  currentState    String? @map("current_state")
-  currentPincode  String? @map("current_pincode")
-  currentAddress  String? @map("current_address") // Computed field
-
-  // Permanent Address
-  sameAsCurrent     Boolean @default(false) @map("same_as_current")
-  permanentHouse    String? @map("permanent_house")
-  permanentCross    String? @map("permanent_cross")
-  permanentArea     String? @map("permanent_area")
-  permanentDistrict String? @map("permanent_district")
-  permanentCity     String? @map("permanent_city")
-  permanentState    String? @map("permanent_state")
-  permanentPincode  String? @map("permanent_pincode")
-  permanentAddress  String? @map("permanent_address") // Computed field
-
-  country String? @default("INDIA")
-
-  // 4. Academic Details - 10th Standard - Updated field names
-  tenthSchool           String?    @map("tenth_school") // Updated from tenthSchoolName
-  tenthArea             String?    @map("tenth_area")
-  tenthDistrict         String?    @map("tenth_district")
-  tenthCity             String?    @map("tenth_city")
-  tenthSchoolName       String?    @map("tenth_school_name") // Keep for compatibility
-  tenthAreaDistrictCity String?    @map("tenth_area_district_city") // Computed field
-  tenthPincode          String?    @map("tenth_pincode")
-  tenthState            String?    @map("tenth_state")
-  tenthBoard            Board?     @map("tenth_board")
-  tenthPassingYear      Int?       @map("tenth_passing_year")
-  tenthPassingMonth     String?    @map("tenth_passing_month") // Changed from Int to String for month names
-  tenthMarksType        MarksType? @map("tenth_marks_type")
-  tenthPercentage       Float?     @map("tenth_percentage")
-  tenthSubjects         Int?       @map("tenth_subjects")
-  tenthTotalMarks       Int?       @map("tenth_total_marks")
-  tenthMarksOutOf1000   Int?       @map("tenth_marks_out_of_1000")
-  tenthMarksCard        String?    @map("tenth_marks_card")
-
-  // Academic Level Selection
-  academicLevel String? @map("academic_level") // "12th" or "Diploma"
-
-  // 12th Standard (if chosen) - Updated field names
-  hasCompletedTwelfth     Boolean    @default(false) @map("has_completed_twelfth")
-  twelfthSchool           String?    @map("twelfth_school") // Updated from twelfthSchoolName
-  twelfthArea             String?    @map("twelfth_area")
-  twelfthDistrict         String?    @map("twelfth_district")
-  twelfthCity             String?    @map("twelfth_city")
-  twelfthSchoolName       String?    @map("twelfth_school_name") // Keep for compatibility
-  twelfthAreaDistrictCity String?    @map("twelfth_area_district_city") // Computed field
-  twelfthPincode          String?    @map("twelfth_pincode")
-  twelfthState            String?    @map("twelfth_state")
-  twelfthBoard            Board?     @map("twelfth_board")
-  twelfthPassingYear      Int?       @map("twelfth_passing_year")
-  twelfthPassingMonth     String?    @map("twelfth_passing_month") // Changed from Int to String
-  twelfthMarksType        MarksType? @map("twelfth_marks_type")
-  twelfthPercentage       Float?     @map("twelfth_percentage")
-  twelfthSubjects         Int?       @map("twelfth_subjects")
-  twelfthTotalMarks       Int?       @map("twelfth_total_marks")
-  twelfthMarksOutOf1000   Int?       @map("twelfth_marks_out_of_1000")
-  twelfthMarksCard        String?    @map("twelfth_marks_card")
-
-  // CBSE specific fields
-  twelfthCbseSubjects String? @map("twelfth_cbse_subjects") // "5" or "6"
-  twelfthCbseMarks    String? @map("twelfth_cbse_marks")
-
-  // ICSE specific fields
-  twelfthIcseMarks String? @map("twelfth_icse_marks")
-
-  // Diploma (if chosen) - Updated field names
-  hasCompletedDiploma Boolean @default(false) @map("has_completed_diploma")
-  diplomaCollege      String? @map("diploma_college") // Updated from diplomaCollegeName
-  diplomaArea         String? @map("diploma_area")
-  diplomaDistrict     String? @map("diploma_district")
-  diplomaCity         String? @map("diploma_city")
-  diplomaCollegeName  String? @map("diploma_college_name") // Keep for compatibility
-  diplomaAreaLocation String? @map("diploma_area_location") // Computed field
-  diplomaCertificate  String? @map("diploma_certificate")
-  diplomaCertificates String? @map("diploma_certificates") // Alternative name
-  diplomaSemesterSgpa Json?   @map("diploma_semester_sgpa") // Array of SGPA for 6 semesters
-  diplomaSemesters    Json?   @map("diploma_semesters") // Array of semester objects
-  diplomaYearMarks    Json?   @map("diploma_year_marks") // Year-wise marks
-  diplomaFirstYear    String? @map("diploma_first_year")
-  diplomaSecondYear   String? @map("diploma_second_year")
-  diplomaThirdYear    String? @map("diploma_third_year")
-  diplomaPercentage   Float?  @map("diploma_percentage")
-
-  // 5. Engineering Details (SDMCET students only) - Updated field names
-  collegeName     String?            @default("SHRI DHARMASTHALA MANJUNATHESHWARA COLLEGE OF ENGINEERING AND TECHNOLOGY") @map("college_name")
-  collegeDistrict String?            @default("DHARWAD") @map("college_district")
-  district        String?            @default("DHARWAD") // Alternative name for collegeDistrict
-  collegePincode  String?            @default("580002") @map("college_pincode")
-  pincode         String?            @default("580002") // Alternative name for collegePincode
-  branch          EngineeringBranch?
-  entryType       EntryType?         @map("entry_type")
-  seatCategory    SeatCategory?      @map("seat_category")
-  usn             String?            @unique // University Seat Number
-  libraryId       String?            @map("library_id")
-  residencyStatus ResidencyStatus?   @map("residency_status")
-
-  // Hostel Details (if Hostelite)
-  hostelName  String? @map("hostel_name")
-  hostelRoom  String? @map("hostel_room") // Updated from roomNumber
-  roomNumber  String? @map("room_number") // Keep for compatibility
-  hostelFloor String? @map("hostel_floor") // Updated from floorNumber
-  floorNumber String? @map("floor_number") // Keep for compatibility
-
-  // Local Details (if Localite)
-  city          String? // Local city field
-  localCity     String?        @map("local_city") // Keep for compatibility
-  transportMode TransportMode? @map("transport_mode")
-  busRoute      String?        @map("bus_route")
-
-  // Batch and Mentor information
-  batch        String? @default("2022 - 2026")
-  branchMentor String? @map("branch_mentor") // Updated from branchMentorName
-
-  // Social Links (expanded) - Updated field names
-  linkedinLink String? @map("linkedin_link") // Updated from linkedin
-  githubLink   String? @map("github_link") // Updated from github
-  leetcodeLink String? @map("leetcode_link") // Updated from leetcode
-
-  // Document Uploads
-  resumeUpload String? @map("resume_upload") // Updated from resume
-
-  // 6. Engineering Academic Records - Updated to match form structure
-  semesters           Json? @map("semesters") // Array of semester objects with sgpa, cgpa, month, year, marksCard, failed, failedSubjects
-  semesterRecords     Json? @map("semester_records") // Keep for compatibility
-  semesterMarksCards  Json? @map("semester_marks_cards") // Array of uploaded cards
-  failedSubjects      Json? @map("failed_subjects") // Per semester failed subjects
-  clearedAfterFailure Json? @map("cleared_after_failure") // Proof uploads
-
-  // 7. Final KYC Details - Updated field names
-  finalCgpa       Float?  @map("final_cgpa")
-  hasBacklogs     String? @map("has_backlogs") // "yes" or "no" - Updated from Boolean
-  activeBacklogs  Boolean @default(false) @map("active_backlogs") // Keep for compatibility
-  backlogs        Json?   @map("backlogs") // Array of backlog objects
-  backlogSubjects Json?   @map("backlog_subjects") // Keep for compatibility
-
-  // Social Links (expanded)
-  linkedin   String?
-  github     String?
-  leetcode   String?
-  portfolio  String?
-  codechef   String?
-  codeforces String?
-  hackerrank String?
-
-  // Document Uploads
-  resume String? // Professional resume upload
-
-  // Existing fields (keeping for compatibility)
-  phone          String? // Deprecated - use callingMobile
-  alternatePhone String? @map("alternate_phone") // Deprecated - use alternativeMobile
-  department     String? // Deprecated - use branch
-  course         String? // Keep for course type
-  specialization String?
-  semester       Int?
-  year           Int?
-  cgpa           Float?
-  percentage     Float?
-
-  // Legacy parent fields (keeping for compatibility)
-  guardianName     String? @map("guardian_name")
-  guardianPhone    String? @map("guardian_phone")
-  guardianRelation String? @map("guardian_relation")
-
-  // Professional Information
-  skills         String[] @default([])
-  certifications String[] @default([])
-  projects       Json? // Array of project objects
-  internships    Json? // Array of internship objects
-  achievements   String[] @default([])
-  hobbies        String[] @default([])
-  languages      String[] @default([])
-
-  // Placement Preferences
-  expectedSalary     Float?    @map("expected_salary")
-  preferredLocations String[]  @default([]) @map("preferred_locations")
-  jobType            JobType?  @map("job_type")
-  workMode           WorkMode? @map("work_mode")
-
-  // KYC and Verification
-  kycStatus  KYCStatus @default(PENDING) @map("kyc_status")
-  verifiedBy String?   @map("verified_by") // Admin ID who verified
-  verifiedAt DateTime? @map("verified_at")
-  remarks    String?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                      String             @id @default(cuid())
+  userId                  String             @unique @map("user_id")
+  isComplete              Boolean            @default(false) @map("is_complete")
+  completionStep          Int                @default(1) @map("completion_step")
+  firstName               String?            @map("first_name")
+  middleName              String?            @map("middle_name")
+  lastName                String?            @map("last_name")
+  dateOfBirth             DateTime?          @map("date_of_birth")
+  dobDay                  String?            @map("dob_day")
+  dobMonth                String?            @map("dob_month")
+  dobYear                 String?            @map("dob_year")
+  gender                  Gender?
+  bloodGroup              BloodGroup?        @map("blood_group")
+  state                   String?
+  stateOfDomicile         String?            @map("state_of_domicile")
+  nationality             String?            @default("INDIAN")
+  category                String?
+  casteCategory           CasteCategory?     @map("caste_category")
+  profilePhoto            String?            @map("profile_photo")
+  email                   String?
+  studentEmail            String?            @map("student_email")
+  callingMobile           String?            @map("calling_mobile")
+  callingNumber           String?            @map("calling_number")
+  whatsappMobile          String?            @map("whatsapp_mobile")
+  whatsappNumber          String?            @map("whatsapp_number")
+  alternativeMobile       String?            @map("alternative_mobile")
+  altNumber               String?            @map("alt_number")
+  fatherFirstName         String?            @map("father_first_name")
+  fatherMiddleName        String?            @map("father_middle_name")
+  fatherLastName          String?            @map("father_last_name")
+  fatherName              String?            @map("father_name")
+  fatherDeceased          Boolean            @default(false) @map("father_deceased")
+  fatherMobile            String?            @map("father_mobile")
+  fatherEmail             String?            @map("father_email")
+  fatherOccupation        String?            @map("father_occupation")
+  motherFirstName         String?            @map("mother_first_name")
+  motherMiddleName        String?            @map("mother_middle_name")
+  motherLastName          String?            @map("mother_last_name")
+  motherName              String?            @map("mother_name")
+  motherDeceased          Boolean            @default(false) @map("mother_deceased")
+  motherMobile            String?            @map("mother_mobile")
+  motherEmail             String?            @map("mother_email")
+  motherOccupation        String?            @map("mother_occupation")
+  currentHouse            String?            @map("current_house")
+  currentCross            String?            @map("current_cross")
+  currentArea             String?            @map("current_area")
+  currentDistrict         String?            @map("current_district")
+  currentCity             String?            @map("current_city")
+  currentState            String?            @map("current_state")
+  currentPincode          String?            @map("current_pincode")
+  currentAddress          String?            @map("current_address")
+  sameAsCurrent           Boolean            @default(false) @map("same_as_current")
+  permanentHouse          String?            @map("permanent_house")
+  permanentCross          String?            @map("permanent_cross")
+  permanentArea           String?            @map("permanent_area")
+  permanentDistrict       String?            @map("permanent_district")
+  permanentCity           String?            @map("permanent_city")
+  permanentState          String?            @map("permanent_state")
+  permanentPincode        String?            @map("permanent_pincode")
+  permanentAddress        String?            @map("permanent_address")
+  country                 String?            @default("INDIA")
+  tenthSchool             String?            @map("tenth_school")
+  tenthArea               String?            @map("tenth_area")
+  tenthDistrict           String?            @map("tenth_district")
+  tenthCity               String?            @map("tenth_city")
+  tenthSchoolName         String?            @map("tenth_school_name")
+  tenthAreaDistrictCity   String?            @map("tenth_area_district_city")
+  tenthPincode            String?            @map("tenth_pincode")
+  tenthState              String?            @map("tenth_state")
+  tenthBoard              Board?             @map("tenth_board")
+  tenthPassingYear        Int?               @map("tenth_passing_year")
+  tenthPassingMonth       String?            @map("tenth_passing_month")
+  tenthMarksType          MarksType?         @map("tenth_marks_type")
+  tenthPercentage         Float?             @map("tenth_percentage")
+  tenthSubjects           Int?               @map("tenth_subjects")
+  tenthTotalMarks         Int?               @map("tenth_total_marks")
+  tenthMarksOutOf1000     Int?               @map("tenth_marks_out_of_1000")
+  tenthMarksCard          String?            @map("tenth_marks_card")
+  academicLevel           String?            @map("academic_level")
+  hasCompletedTwelfth     Boolean            @default(false) @map("has_completed_twelfth")
+  twelfthSchool           String?            @map("twelfth_school")
+  twelfthArea             String?            @map("twelfth_area")
+  twelfthDistrict         String?            @map("twelfth_district")
+  twelfthCity             String?            @map("twelfth_city")
+  twelfthSchoolName       String?            @map("twelfth_school_name")
+  twelfthAreaDistrictCity String?            @map("twelfth_area_district_city")
+  twelfthPincode          String?            @map("twelfth_pincode")
+  twelfthState            String?            @map("twelfth_state")
+  twelfthBoard            Board?             @map("twelfth_board")
+  twelfthPassingYear      Int?               @map("twelfth_passing_year")
+  twelfthPassingMonth     String?            @map("twelfth_passing_month")
+  twelfthMarksType        MarksType?         @map("twelfth_marks_type")
+  twelfthPercentage       Float?             @map("twelfth_percentage")
+  twelfthSubjects         Int?               @map("twelfth_subjects")
+  twelfthTotalMarks       Int?               @map("twelfth_total_marks")
+  twelfthMarksOutOf1000   Int?               @map("twelfth_marks_out_of_1000")
+  twelfthMarksCard        String?            @map("twelfth_marks_card")
+  twelfthCbseSubjects     String?            @map("twelfth_cbse_subjects")
+  twelfthCbseMarks        String?            @map("twelfth_cbse_marks")
+  twelfthIcseMarks        String?            @map("twelfth_icse_marks")
+  hasCompletedDiploma     Boolean            @default(false) @map("has_completed_diploma")
+  diplomaCollege          String?            @map("diploma_college")
+  diplomaArea             String?            @map("diploma_area")
+  diplomaDistrict         String?            @map("diploma_district")
+  diplomaCity             String?            @map("diploma_city")
+  diplomaCollegeName      String?            @map("diploma_college_name")
+  diplomaAreaLocation     String?            @map("diploma_area_location")
+  diplomaCertificate      String?            @map("diploma_certificate")
+  diplomaCertificates     String?            @map("diploma_certificates")
+  diplomaSemesterSgpa     Json?              @map("diploma_semester_sgpa")
+  diplomaSemesters        Json?              @map("diploma_semesters")
+  diplomaYearMarks        Json?              @map("diploma_year_marks")
+  diplomaFirstYear        String?            @map("diploma_first_year")
+  diplomaSecondYear       String?            @map("diploma_second_year")
+  diplomaThirdYear        String?            @map("diploma_third_year")
+  diplomaPercentage       Float?             @map("diploma_percentage")
+  collegeName             String?            @default("SHRI DHARMASTHALA MANJUNATHESHWARA COLLEGE OF ENGINEERING AND TECHNOLOGY") @map("college_name")
+  collegeDistrict         String?            @default("DHARWAD") @map("college_district")
+  district                String?            @default("DHARWAD")
+  collegePincode          String?            @default("580002") @map("college_pincode")
+  pincode                 String?            @default("580002")
+  branch                  EngineeringBranch?
+  entryType               EntryType?         @map("entry_type")
+  seatCategory            SeatCategory?      @map("seat_category")
+  usn                     String?            @unique
+  libraryId               String?            @map("library_id")
+  residencyStatus         ResidencyStatus?   @map("residency_status")
+  hostelName              String?            @map("hostel_name")
+  hostelRoom              String?            @map("hostel_room")
+  roomNumber              String?            @map("room_number")
+  hostelFloor             String?            @map("hostel_floor")
+  floorNumber             String?            @map("floor_number")
+  city                    String?
+  localCity               String?            @map("local_city")
+  transportMode           TransportMode?     @map("transport_mode")
+  busRoute                String?            @map("bus_route")
+  batch                   String?            @default("2022 - 2026")
+  branchMentor            String?            @map("branch_mentor")
+  linkedinLink            String?            @map("linkedin_link")
+  githubLink              String?            @map("github_link")
+  leetcodeLink            String?            @map("leetcode_link")
+  resumeUpload            String?            @map("resume_upload")
+  semesters               Json?              @map("semesters")
+  semesterRecords         Json?              @map("semester_records")
+  semesterMarksCards      Json?              @map("semester_marks_cards")
+  failedSubjects          Json?              @map("failed_subjects")
+  clearedAfterFailure     Json?              @map("cleared_after_failure")
+  finalCgpa               Float?             @map("final_cgpa")
+  hasBacklogs             String?            @map("has_backlogs")
+  activeBacklogs          Boolean            @default(false) @map("active_backlogs")
+  backlogs                Json?              @map("backlogs")
+  backlogSubjects         Json?              @map("backlog_subjects")
+  linkedin                String?
+  github                  String?
+  leetcode                String?
+  portfolio               String?
+  codechef                String?
+  codeforces              String?
+  hackerrank              String?
+  resume                  String?
+  phone                   String?
+  alternatePhone          String?            @map("alternate_phone")
+  department              String?
+  course                  String?
+  specialization          String?
+  semester                Int?
+  year                    Int?
+  cgpa                    Float?
+  percentage              Float?
+  guardianName            String?            @map("guardian_name")
+  guardianPhone           String?            @map("guardian_phone")
+  guardianRelation        String?            @map("guardian_relation")
+  skills                  String[]           @default([])
+  certifications          String[]           @default([])
+  projects                Json?
+  internships             Json?
+  achievements            String[]           @default([])
+  hobbies                 String[]           @default([])
+  languages               String[]           @default([])
+  expectedSalary          Float?             @map("expected_salary")
+  preferredLocations      String[]           @default([]) @map("preferred_locations")
+  jobType                 JobType?           @map("job_type")
+  workMode                WorkMode?          @map("work_mode")
+  kycStatus               KYCStatus          @default(PENDING) @map("kyc_status")
+  verifiedBy              String?            @map("verified_by")
+  verifiedAt              DateTime?          @map("verified_at")
+  remarks                 String?
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+  collegeIdCard           String?            @map("college_id_card")
+  academicDocument        String?            @map("academic_document")
+  diplomaPincode          String?            @map("diploma_pincode")
+  diplomaState            String?            @map("diploma_state")
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("profiles")
+}
+
+model ScheduleEvent {
+  id           String          @id @default(cuid())
+  title        String
+  description  String?
+  date         DateTime
+  duration     Int
+  location     String?
+  type         EventType
+  company      String?
+  maxAttendees Int?
+  status       EventStatus     @default(SCHEDULED)
+  isVisible    Boolean         @default(true)
+  createdBy    String
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  attendees    EventAttendee[]
+  creator      User            @relation("CreatedEvents", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("schedule_events")
+}
+
+model EventAttendee {
+  id        String         @id @default(cuid())
+  eventId   String         @map("event_id")
+  userId    String         @map("user_id")
+  status    AttendeeStatus @default(REGISTERED)
+  createdAt DateTime       @default(now()) @map("created_at")
+  event     ScheduleEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User           @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_attendees")
+}
+
+model Job {
+  id              String        @id @default(cuid())
+  title           String
+  companyId       String?       @map("company_id")
+  companyName     String        @map("company_name")
+  companyLogo     String?       @map("company_logo")
+  description     String
+  location        String
+  category        JobCategory   @default(FTE)
+  tier            PlacementTier @default(TIER_3)
+  isDreamOffer    Boolean       @default(false) @map("is_dream_offer")
+  jobType         JobType       @map("job_type")
+  workMode        WorkMode      @map("work_mode")
+  minCGPA         Float?        @map("min_cgpa")
+  allowedBranches String[]      @map("allowed_branches")
+  eligibleBatch   String?       @map("eligible_batch")
+  maxBacklogs     Int?          @map("max_backlogs")
+  salary          String?
+  minSalary       Float?        @map("min_salary")
+  maxSalary       Float?        @map("max_salary")
+  requiredSkills  String[]      @default([]) @map("required_skills")
+  preferredSkills String[]      @default([]) @map("preferred_skills")
+  deadline        DateTime?
+  startDate       DateTime?     @map("start_date")
+  noOfPositions   Int?          @default(1) @map("no_of_positions")
+  status          JobStatus     @default(ACTIVE)
+  isVisible       Boolean       @default(true) @map("is_visible")
+  postedBy        String        @map("posted_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  googleFormUrl   String?       @map("google_form_url")
+  applications    Application[]
+  updates         JobUpdate[]
+  customFields    JobCustomField[]
+  company         Company?      @relation(fields: [companyId], references: [id])
+
+  @@map("jobs")
+}
+
+model Application {
+  id            String    @id @default(cuid())
+  jobId         String    @map("job_id")
+  userId        String    @map("user_id")
+  appliedAt     DateTime  @default(now()) @map("applied_at")
+  resumeUsed    String?   @map("resume_used")
+  isRemoved     Boolean   @default(false) @map("is_removed")
+  removedAt     DateTime? @map("removed_at")
+  removedBy     String?   @map("removed_by")
+  removalReason String?   @map("removal_reason")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses     JobApplicationResponse[]
+
+  @@unique([jobId, userId])
+  @@index([userId])
+  @@index([jobId])
+  @@map("applications")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false) @map("is_read")
+  data      Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+  readAt    DateTime?        @map("read_at")
+  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Attendance {
+  id        String    @id @default(cuid())
+  studentId String    @map("student_id")
+  jobId     String?   @map("job_id")
+  eventId   String?   @map("event_id")
+  qrCode    String    @unique @map("qr_code")
+  scannedAt DateTime? @map("scanned_at")
+  scannedBy String?   @map("scanned_by")
+  location  String?
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([studentId])
+  @@index([jobId])
+  @@index([eventId])
+  @@index([qrCode])
+  @@map("attendances")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  logo        String?
+  website     String?
+  industry    String?
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  jobs        Job[]
+
+  @@map("companies")
+}
+
+model Placement {
+  id            String        @id @default(cuid())
+  userId        String        @map("user_id")
+  jobId         String        @map("job_id")
+  tier          PlacementTier
+  salary        Float
+  companyName   String        @map("company_name")
+  isException   Boolean       @default(false) @map("is_exception")
+  exceptionNote String?       @map("exception_note")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([tier])
+  @@map("placements")
+}
+
+model JobUpdate {
+  id        String   @id @default(cuid())
+  jobId     String   @map("job_id")
+  title     String
+  message   String
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("job_updates")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model DeadlineReminder {
+  id     String   @id @default(cuid())
+  jobId  String   @unique @map("job_id")
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  @@map("deadline_reminders")
+}
+
+model Document {
+  id                   String    @id @default(cuid())
+  userId               String    @unique @map("user_id")
+  usn                  String?
+  cgpa                 Float?
+  tenthMarksCardLink   String?   @map("tenth_marks_card_link")
+  twelfthMarksCardLink String?   @map("twelfth_marks_card_link")
+  sem1Link             String?   @map("sem1_link")
+  sem2Link             String?   @map("sem2_link")
+  sem3Link             String?   @map("sem3_link")
+  sem4Link             String?   @map("sem4_link")
+  sem5Link             String?   @map("sem5_link")
+  sem6Link             String?   @map("sem6_link")
+  sem7Link             String?   @map("sem7_link")
+  sem8Link             String?   @map("sem8_link")
+  kycStatus            KYCStatus @default(PENDING) @map("kyc_status")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
 }
 
 enum UserRole {
@@ -457,46 +613,6 @@ enum EventStatus {
   CANCELLED
 }
 
-// Scheduler Models
-model ScheduleEvent {
-  id           String      @id @default(cuid())
-  title        String
-  description  String?
-  date         DateTime
-  duration     Int // Duration in minutes
-  location     String?
-  type         EventType
-  company      String?
-  maxAttendees Int?
-  status       EventStatus @default(SCHEDULED)
-  isVisible    Boolean     @default(true)
-
-  // Relations
-  createdBy String
-  creator   User            @relation("CreatedEvents", fields: [createdBy], references: [id], onDelete: Cascade)
-  attendees EventAttendee[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("schedule_events")
-}
-
-model EventAttendee {
-  id      String         @id @default(cuid())
-  eventId String         @map("event_id")
-  userId  String         @map("user_id")
-  status  AttendeeStatus @default(REGISTERED)
-
-  event ScheduleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User          @relation("EventAttendees", fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@unique([eventId, userId])
-  @@map("event_attendees")
-}
-
 enum AttendeeStatus {
   REGISTERED
   ATTENDED
@@ -504,94 +620,10 @@ enum AttendeeStatus {
   CANCELLED
 }
 
-// Job Posting Models (Posted by TPO/Admin only)
-model Job {
-  id          String   @id @default(cuid())
-  title       String
-  companyId   String?  @map("company_id")
-  company     Company? @relation(fields: [companyId], references: [id])
-  companyName String   @map("company_name") // Fallback if no company relation
-  companyLogo String?  @map("company_logo")
-  description String   @db.Text
-  location    String
-
-  // Job Category
-  category JobCategory @default(FTE)
-
-  // Tier System
-  tier         PlacementTier @default(TIER_3)
-  isDreamOffer Boolean       @default(false) @map("is_dream_offer") // Admin can mark as dream offer
-
-  // Job Type
-  jobType  JobType  @map("job_type")
-  workMode WorkMode @map("work_mode")
-
-  // Eligibility Criteria
-  minCGPA         Float?   @map("min_cgpa")
-  allowedBranches String[] @default([]) @map("allowed_branches") // Empty = ALL branches
-  eligibleBatch   String?  @map("eligible_batch")
-  maxBacklogs     Int?     @default(0) @map("max_backlogs")
-
-  // Salary Information
-  salary    String? // e.g., "6-8 LPA" display text
-  minSalary Float?  @map("min_salary") // In LPA
-  maxSalary Float?  @map("max_salary") // In LPA
-
-  // Skills and Requirements
-  requiredSkills  String[] @default([]) @map("required_skills")
-  preferredSkills String[] @default([]) @map("preferred_skills")
-
-  // Application Details
-  deadline      DateTime?
-  startDate     DateTime? @map("start_date")
-  noOfPositions Int?      @default(1) @map("no_of_positions")
-
-  // Status
-  status    JobStatus @default(ACTIVE)
-  isVisible Boolean   @default(true) @map("is_visible")
-
-  // Relations
-  postedBy     String        @map("posted_by")
-  applications Application[]
-  updates      JobUpdate[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("jobs")
-}
-
 enum JobCategory {
-  TRAINING_INTERNSHIP // Training + Internship
-  INTERNSHIP // Internship only
-  FTE // Full-Time Employment
-}
-
-model Application {
-  id        String   @id @default(cuid())
-  jobId     String   @map("job_id")
-  userId    String   @map("user_id")
-  appliedAt DateTime @default(now()) @map("applied_at")
-
-  // Resume used at time of application
-  resumeUsed String? @map("resume_used")
-
-  // Admin can remove mistaken applications
-  isRemoved     Boolean   @default(false) @map("is_removed")
-  removedAt     DateTime? @map("removed_at")
-  removedBy     String?   @map("removed_by")
-  removalReason String?   @map("removal_reason")
-
-  // Relations
-  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([jobId, userId])
-  @@index([userId])
-  @@index([jobId])
-  @@map("applications")
+  TRAINING_INTERNSHIP
+  INTERNSHIP
+  FTE
 }
 
 enum JobStatus {
@@ -599,23 +631,6 @@ enum JobStatus {
   ACTIVE
   CLOSED
   CANCELLED
-}
-
-// Notification System
-model Notification {
-  id        String           @id @default(cuid())
-  userId    String           @map("user_id")
-  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  message   String           @db.Text
-  type      NotificationType
-  isRead    Boolean          @default(false) @map("is_read")
-  data      Json? // Extra data (jobId, eventId, etc.)
-  createdAt DateTime         @default(now()) @map("created_at")
-  readAt    DateTime?        @map("read_at")
-
-  @@index([userId, isRead])
-  @@map("notifications")
 }
 
 enum NotificationType {
@@ -631,105 +646,47 @@ enum NotificationType {
   SYSTEM
 }
 
-// Attendance Tracking with QR Code
-model Attendance {
-  id        String    @id @default(cuid())
-  studentId String    @map("student_id")
-  jobId     String?   @map("job_id")
-  eventId   String?   @map("event_id")
-  qrCode    String    @unique @map("qr_code") // Unique QR code for this attendance record
-  scannedAt DateTime? @map("scanned_at") // When the QR was scanned
-  scannedBy String?   @map("scanned_by") // Admin who scanned the QR
-  location  String?
-  notes     String?   @db.Text
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@index([studentId])
-  @@index([jobId])
-  @@index([eventId])
-  @@index([qrCode])
-  @@map("attendances")
-}
-
-// Company Management
-model Company {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  logo        String?
-  website     String?
-  industry    String?
-  description String? @db.Text
-  isActive    Boolean @default(true) @map("is_active")
-
-  jobs Job[]
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("companies")
-}
-
-// Placement Records - Tracks which tier a student is placed in
-model Placement {
-  id            String        @id @default(cuid())
-  userId        String        @map("user_id")
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId         String        @map("job_id")
-  tier          PlacementTier
-  salary        Float // Actual offered salary in LPA
-  companyName   String        @map("company_name")
-  isException   Boolean       @default(false) @map("is_exception") // Admin allowed exception
-  exceptionNote String?       @map("exception_note") @db.Text
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([userId, jobId])
-  @@index([userId])
-  @@index([tier])
-  @@map("placements")
-}
-
 enum PlacementTier {
-  TIER_3 // <= 5 LPA
-  TIER_2 // > 5 LPA and <= 9 LPA  
-  TIER_1 // > 9 LPA
-  DREAM // > 10 LPA, admin-decided
+  TIER_3
+  TIER_2
+  TIER_1
+  DREAM
 }
 
-// Job Updates - Announcements/changes to job postings
-model JobUpdate {
-  id        String   @id @default(cuid())
-  jobId     String   @map("job_id")
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  title     String
-  message   String   @db.Text
-  createdBy String   @map("created_by")
-  createdAt DateTime @default(now()) @map("created_at")
+model JobCustomField {
+  id        String                   @id @default(cuid())
+  jobId     String                   @map("job_id")
+  label     String
+  type      CustomFieldType
+  required  Boolean                  @default(false)
+  options   Json?                    // Array of strings for Dropdown
+  createdAt DateTime                 @default(now()) @map("created_at")
+  updatedAt DateTime                 @updatedAt @map("updated_at")
+  job       Job                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  responses JobApplicationResponse[]
 
-  @@index([jobId])
-  @@map("job_updates")
+  @@map("job_custom_fields")
 }
 
-// Browser Push Notification Subscriptions
-model PushSubscription {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint  String   @unique
-  p256dh    String // Public key for encryption
-  auth      String // Auth secret
-  createdAt DateTime @default(now()) @map("created_at")
+model JobApplicationResponse {
+  id            String         @id @default(cuid())
+  applicationId String         @map("application_id")
+  fieldId       String         @map("field_id")
+  value         String?        // Text value or URL for file
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  field         JobCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@map("push_subscriptions")
+  @@unique([applicationId, fieldId])
+  @@map("job_application_responses")
 }
 
-// Deadline Reminder Tracking (to avoid duplicate reminders)
-model DeadlineReminder {
-  id     String   @id @default(cuid())
-  jobId  String   @unique @map("job_id")
-  sentAt DateTime @default(now()) @map("sent_at")
-
-  @@map("deadline_reminders")
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DROPDOWN
+  BOOLEAN
+  FILE_UPLOAD
+  TEXTAREA
 }

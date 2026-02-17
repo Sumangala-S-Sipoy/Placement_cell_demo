@@ -51,8 +51,9 @@ export default function Navbar() {
                 pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <NavigationMenuItem key={item.href}>
-                  <Link href={item.href} legacyBehavior passHref>
-                    <NavigationMenuLink
+                  <NavigationMenuLink asChild>
+                    <Link
+                      href={item.href}
                       className={cn(
                         "group inline-flex h-9 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors",
                         "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none",
@@ -63,8 +64,8 @@ export default function Navbar() {
                     >
                       <item.icon className="mr-2 h-4 w-4" />
                       {item.label}
-                    </NavigationMenuLink>
-                  </Link>
+                    </Link>
+                  </NavigationMenuLink>
                 </NavigationMenuItem>
               );
             })}

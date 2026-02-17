@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
     Dialog,
     DialogContent,
@@ -29,6 +30,7 @@ import { format } from "date-fns"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ApplicationReviewDialog } from "@/components/application-review-dialog"
 
 interface Job {
     id: string
@@ -39,81 +41,153 @@ interface Job {
     location: string
     jobType: string
     workMode: string
-    salary: number
+    salary?: string
     tier: string
     category: string
     isDreamOffer: boolean
-    minCGPA?: number
+    minCGPA: number | null
     allowedBranches: string[]
-    eligibleBatch?: string
-    maxBacklogs?: number
+    eligibleBatch: string | null
+    maxBacklogs: number | null
     requiredSkills: string[]
     preferredSkills: string[]
     deadline?: string
     startDate?: string
     noOfPositions?: number
+    googleFormUrl?: string
     createdAt: string
+    customFields?: {
+        id: string
+        label: string
+        type: "TEXT" | "NUMBER" | "DROPDOWN" | "BOOLEAN" | "FILE_UPLOAD" | "TEXTAREA"
+        required: boolean
+        options?: any
+    }[]
     _count: {
         applications: number
     }
+}
+
+interface Profile {
+    firstName?: string
+    lastName?: string
+    email?: string
+    callingMobile?: string
+    branch?: string
+    batch?: string
+    cgpa?: number
+    usn?: string
+    resume?: string
+    resumeUpload?: string
+    kycStatus?: string
 }
 
 export default function JobDetailPage() {
     const params = useParams()
     const router = useRouter()
     const [job, setJob] = useState<Job | null>(null)
+    const [profile, setProfile] = useState<Profile | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [hasApplied, setHasApplied] = useState(false)
     const [isApplying, setIsApplying] = useState(false)
+    const [showReviewDialog, setShowReviewDialog] = useState(false)
     const [qrCode, setQrCode] = useState<string | null>(null)
     const [showQRDialog, setShowQRDialog] = useState(false)
 
     useEffect(() => {
-        const fetchJob = async () => {
+        const fetchData = async () => {
             try {
-                const response = await fetch(`/api/jobs/${params.id}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    setJob(data.job)
-                    setHasApplied(data.hasApplied)
+                // Fetch job and profile in parallel
+                const [jobResponse, profileResponse] = await Promise.all([
+                    fetch(`/api/jobs/${params.id}`),
+                    fetch(`/api/profile`)
+                ])
+
+                if (jobResponse.ok) {
+                    const jobData = await jobResponse.json()
+                    setJob(jobData.job)
+                    setHasApplied(jobData.hasApplied)
                 } else {
                     toast.error("Job not found")
                     router.push("/jobs")
+                    return
+                }
+
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json()
+                    setProfile(profileData.profile || {})
                 }
             } catch (error) {
-                console.error("Error fetching job:", error)
+                console.error("Error fetching data:", error)
                 toast.error("Failed to load job details")
             } finally {
                 setIsLoading(false)
             }
         }
 
-        fetchJob()
+        fetchData()
     }, [params.id, router])
 
-    const handleApply = async () => {
+    const handleApplyClick = () => {
+        // Check if profile is complete and KYC verified
+        if (!profile) {
+            toast.error("Please complete your profile first")
+            router.push("/profile")
+            return
+        }
+
+        // Check KYC verification status
+        if (profile.kycStatus !== 'VERIFIED') {
+            toast.error("Your profile must be verified before applying. Please complete KYC verification.")
+            router.push("/profile")
+            return
+        }
+
+        // Show review dialog
+        setShowReviewDialog(true)
+    }
+
+    const handleConfirmApplication = async (resumeUrl?: string, responses?: any[]) => {
         setIsApplying(true)
         try {
-            const response = await fetch(`/api/jobs/${params.id}`, {
+            const response = await fetch(`/api/applications`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({}),
+                body: JSON.stringify({
+                    jobId: params.id,
+                    resumeUrl,
+                    responses
+                }),
             })
 
             if (response.ok) {
                 const data = await response.json()
                 toast.success("Application submitted successfully!")
                 setHasApplied(true)
+                setShowReviewDialog(false)
 
+                // If Google Form URL exists, open it
+                if (job?.googleFormUrl) {
+                    window.open(job.googleFormUrl, '_blank')
+                    toast.info("Please fill the Google Form that just opened")
+                }
+
+                // Show QR code
                 if (data.qrCode) {
                     setQrCode(data.qrCode)
                     setShowQRDialog(true)
                 }
+
+                // Refresh page to update UI
+                router.refresh()
             } else {
                 const error = await response.json()
                 toast.error(error.error || "Failed to apply")
+                if (error.kycStatus && error.kycStatus !== 'VERIFIED') {
+                    router.push("/profile")
+                }
             }
         } catch (error) {
             console.error("Error applying:", error)
@@ -190,6 +264,23 @@ export default function JobDetailPage() {
                 </Button>
             </Link>
 
+            {/* KYC Verification Banner */}
+            {profile && profile.kycStatus !== 'VERIFIED' && (
+                <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertDescription className="flex items-center justify-between">
+                        <span className="text-yellow-800 dark:text-yellow-300">
+                            ⚠️ Complete your profile and upload College ID to apply for jobs
+                        </span>
+                        <Link href="/profile">
+                            <Button size="sm" variant="outline">
+                                Complete Profile
+                            </Button>
+                        </Link>
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/* Job Header */}
             <Card>
                 <CardContent className="pt-6">
@@ -246,8 +337,8 @@ export default function JobDetailPage() {
                                     Deadline Passed
                                 </Button>
                             ) : (
-                                <Button onClick={handleApply} disabled={isApplying}>
-                                    {isApplying ? "Applying..." : "Apply Now"}
+                                <Button onClick={handleApplyClick} disabled={isApplying}>
+                                    Apply Now
                                 </Button>
                             )}
                             <p className="text-lg font-semibold text-green-600">₹{job.salary} LPA</p>
@@ -272,38 +363,6 @@ export default function JobDetailPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Skills */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Required Skills</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {job.requiredSkills.length > 0 && (
-                                <div>
-                                    <p className="text-sm text-muted-foreground mb-2">Must have:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {job.requiredSkills.map((skill, index) => (
-                                            <Badge key={index} variant="secondary">
-                                                {skill}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {job.preferredSkills.length > 0 && (
-                                <div>
-                                    <p className="text-sm text-muted-foreground mb-2">Good to have:</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {job.preferredSkills.map((skill, index) => (
-                                            <Badge key={index} variant="outline">
-                                                {skill}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
                 </div>
 
                 {/* Sidebar */}
@@ -364,13 +423,13 @@ export default function JobDetailPage() {
                             <CardTitle>Eligibility Criteria</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            {job.minCGPA && (
+                            {job.minCGPA !== null && (
                                 <div className="flex items-center gap-2">
                                     <GraduationCap className="w-4 h-4 text-muted-foreground" />
                                     <span className="text-sm">Min CGPA: {job.minCGPA}</span>
                                 </div>
                             )}
-                            {job.allowedBranches.length > 0 && (
+                            {job.allowedBranches && job.allowedBranches.length > 0 && (
                                 <div>
                                     <p className="text-sm text-muted-foreground mb-1">Allowed Branches:</p>
                                     <div className="flex flex-wrap gap-1">
@@ -388,13 +447,17 @@ export default function JobDetailPage() {
                                     <span className="text-sm">Batch: {job.eligibleBatch}</span>
                                 </div>
                             )}
-                            {job.maxBacklogs !== null && job.maxBacklogs !== undefined && (
+                            {job.maxBacklogs !== null && (
                                 <div className="flex items-center gap-2">
                                     <AlertCircle className="w-4 h-4 text-muted-foreground" />
                                     <span className="text-sm">
                                         {job.maxBacklogs === 0 ? "No backlogs allowed" : `Max ${job.maxBacklogs} backlogs`}
                                     </span>
                                 </div>
+                            )}
+                            {/* If no eligibility criteria are set, show a message */}
+                            {job.minCGPA === null && (!job.allowedBranches || job.allowedBranches.length === 0) && !job.eligibleBatch && job.maxBacklogs === null && (
+                                <p className="text-sm text-muted-foreground italic">No specific eligibility criteria mentioned.</p>
                             )}
                         </CardContent>
                     </Card>
@@ -425,6 +488,20 @@ export default function JobDetailPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Application Review Dialog */}
+            {job && profile && (
+                <ApplicationReviewDialog
+                    open={showReviewDialog}
+                    onOpenChange={setShowReviewDialog}
+                    profile={profile}
+                    job={{
+                        ...job
+                    }}
+                    onConfirm={handleConfirmApplication}
+                    isApplying={isApplying}
+                />
+            )}
         </div>
     )
 }

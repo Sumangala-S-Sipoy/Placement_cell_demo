@@ -79,6 +79,12 @@ export default function JobsPage() {
         const data = await response.json()
         setJobs(data.jobs)
         setTotalPages(data.pagination.pages)
+      } else {
+        console.error("Failed to fetch jobs:", response.status, response.statusText)
+        // Check if 401
+        if (response.status === 401) {
+          console.error("User unauthorized, session might be invalid")
+        }
       }
     } catch (error) {
       console.error("Error fetching jobs:", error)

@@ -24,7 +24,7 @@ interface DocumentUploadProps {
   label?: string
   required?: boolean
   error?: string
-  initialFile?: File | null
+  initialFile?: File | { url: string; name: string } | null
   description?: string
   placeholder?: string
 }
@@ -109,8 +109,27 @@ export function DocumentUpload({
   ] = useFileUpload({
     accept,
     maxSize,
+    initialFiles: initialFile
+      ? [
+        initialFile instanceof File
+          ? {
+            name: initialFile.name,
+            size: initialFile.size,
+            type: initialFile.type,
+            url: URL.createObjectURL(initialFile),
+            id: 'initial'
+          }
+          : {
+            name: initialFile.name,
+            size: 0,
+            type: 'application/pdf',
+            url: initialFile.url,
+            id: 'initial'
+          }
+      ]
+      : [],
     onFilesChange: (updatedFiles) => {
-      const file = updatedFiles.length > 0 ? updatedFiles[0].file as File : null
+      const file = updatedFiles.length > 0 ? (updatedFiles[0].file instanceof File ? updatedFiles[0].file : null) : null
       onFileChange?.(file)
     }
   })

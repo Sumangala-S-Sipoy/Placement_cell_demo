@@ -5,17 +5,30 @@ import { uploadToR2, generateFilename, getFileTypeCategory } from "@/lib/r2-stor
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const formData = await request.formData()
     const file = formData.get("file") as File
-    const type = formData.get("type") as string
+    let type = formData.get("type") as string | null
+    const folder = formData.get("folder") as string | null
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
+    }
+
+    // Support both "type" and "folder" parameters for backward compatibility
+    if (!type && folder) {
+      // Map folder names to types
+      const folderToTypeMap: Record<string, string> = {
+        "college-id-cards": "college-id-card",
+        "resumes": "resume",
+        "profile-photos": "profile-photo",
+        "academic-documents": "academic-document",
+      }
+      type = folderToTypeMap[folder] || folder
     }
 
     if (!type) {
@@ -26,14 +39,18 @@ export async function POST(request: NextRequest) {
     const allowedTypes: Record<string, string[]> = {
       "profile-photo": ["image/jpeg", "image/png", "image/webp"],
       "resume": ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      "college-id-card": ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
       "tenthMarksCard": ["application/pdf", "image/jpeg", "image/png"],
       "twelfthMarksCard": ["application/pdf", "image/jpeg", "image/png"],
       "diplomaMarksCard": ["application/pdf", "image/jpeg", "image/png"],
+      "diplomaCertificates": ["application/pdf", "image/jpeg", "image/png"],
+      "semesterMarksCard": ["application/pdf", "image/jpeg", "image/png"],
       "degreeMarksCard": ["application/pdf", "image/jpeg", "image/png"],
       "transcript": ["application/pdf"],
       "passport": ["application/pdf", "image/jpeg", "image/png"],
       "aadharCard": ["application/pdf", "image/jpeg", "image/png"],
       "panCard": ["application/pdf", "image/jpeg", "image/png"],
+      "academic-document": ["application/pdf", "image/jpeg", "image/png"],
     }
 
     if (!allowedTypes[type]?.includes(file.type)) {
@@ -45,8 +62,9 @@ export async function POST(request: NextRequest) {
 
     // Validate file size (10MB limit for documents, 5MB for images)
     const fileTypeCategory = getFileTypeCategory(type)
-    const maxSize = fileTypeCategory === "image" ? 5 * 1024 * 1024 : 10 * 1024 * 1024
-    
+    // College ID cards can be up to 10MB (images or PDFs)
+    const maxSize = (fileTypeCategory === "image" && type !== "college-id-card") ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+
     if (file.size > maxSize) {
       const sizeLimit = fileTypeCategory === "image" ? "5MB" : "10MB"
       return NextResponse.json(
@@ -81,8 +99,33 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error("Error uploading file:", error)
+
+    // Provide more specific error messages
+    if (error instanceof Error) {
+      // Check if it's an R2 configuration error
+      if (error.message.includes("R2") || error.message.includes("storage")) {
+        return NextResponse.json(
+          { error: "Storage service is not configured. Please contact support." },
+          { status: 503 }
+        )
+      }
+
+      // Check if it's a file processing error
+      if (error.message.includes("buffer") || error.message.includes("arrayBuffer")) {
+        return NextResponse.json(
+          { error: "Failed to process file. Please try again with a different file." },
+          { status: 400 }
+        )
+      }
+
+      return NextResponse.json(
+        { error: error.message || "Failed to upload file" },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error. Please try again later." },
       { status: 500 }
     )
   }

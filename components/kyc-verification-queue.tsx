@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
-import { 
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -16,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog"
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -27,51 +29,104 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
-import { 
-  Eye, 
-  Check, 
-  X, 
-  Clock, 
-  User, 
-  Mail, 
+import {
+  Eye,
+  Check,
+  X,
+  Clock,
+  User,
+  Mail,
   Calendar,
   FileText,
   Download,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle
 } from "lucide-react"
 import { format } from "date-fns"
+import { getDocumentUrl } from "@/lib/document-utils"
 
-interface Profile {
-  id: string
-  firstName: string | null
-  lastName: string | null
-  email: string | null
-  phone: string | null
-  kycStatus: string
-  isComplete: boolean
-  completionStep: number
-  usn: string | null
-  branch: string | null
-  batch: string | null
-  createdAt: Date
-  updatedAt: Date
+function DocumentPreview({ url, label, publicDomain }: { url: string | null | undefined, label: string, publicDomain?: string }) {
+  if (!url) return (
+    <div className="border rounded-md p-3 bg-gray-50/50">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm text-muted-foreground">{label}</span>
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Missing</Badge>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="border rounded-md p-3 bg-white shadow-sm border-gray-200">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col">
+          <span className="font-semibold text-sm">{label}</span>
+          <Badge variant="outline" className="w-fit mt-1 bg-green-50 text-green-700 border-green-200 uppercase text-[10px] font-bold tracking-wider">
+            Uploaded
+          </Badge>
+        </div>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-8 px-4 bg-blue-600 hover:bg-blue-700"
+          onClick={() => {
+            const fileUrl = getDocumentUrl(url, publicDomain);
+            console.log("File URL:", fileUrl); // Check browser console
+            window.open(fileUrl, '_blank', 'noopener,noreferrer');
+          }}
+        >
+          <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+          View
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+interface BacklogData {
+  code: string
+  title: string
+}
+
+interface SemesterData {
+  semester: number
+  marksCard: string | null
+  sgpa: string
+  cgpa: string
+}
+
+import type { Profile as PrismaProfile } from "@prisma/client"
+
+export interface Profile extends Omit<PrismaProfile, 'semesters' | 'backlogs'> {
   user: {
     id: string
     name: string | null
     email: string | null
     createdAt: Date
+    document?: any // Include Document model
   }
+  // Override Json fields
+  semesters: SemesterData[] | any
+  backlogs: BacklogData[] | any
+
+  // Explicitly add academicDocument if missing from generated type
+  academicDocument: string | null
 }
 
 interface KYCVerificationQueueProps {
   pendingVerifications: Profile[]
   adminId: string
+  publicDomain?: string
 }
 
-export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerificationQueueProps) {
+export function KYCVerificationQueue({ pendingVerifications, adminId, publicDomain }: KYCVerificationQueueProps) {
+  // ... (keeping state and helper functions same as they are not needing change) ...
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [verificationNotes, setVerificationNotes] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Local state for backlog inputs (if admin needs to edit/verify)
+  const [backlogCount, setBacklogCount] = useState<string>("")
+  const [backlogSubjects, setBacklogSubjects] = useState<string>("")
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -88,6 +143,20 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
     }
   }
 
+  const handleProfileSelect = (profile: Profile) => {
+    setSelectedProfile(profile)
+    // Initialize backlog fields from profile data if available
+    const count = profile.backlogs?.length || 0
+    setBacklogCount(count.toString())
+
+    if (Array.isArray(profile.backlogs)) {
+      const subjects = profile.backlogs.map((b: any) => `${b.code} - ${b.title}`).join(", ")
+      setBacklogSubjects(subjects)
+    } else {
+      setBacklogSubjects("")
+    }
+  }
+
   const handleVerification = async (profileId: string, status: 'VERIFIED' | 'REJECTED') => {
     setIsProcessing(true)
     try {
@@ -100,7 +169,10 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
           profileId,
           status,
           notes: verificationNotes,
-          verifiedBy: adminId
+          verifiedBy: adminId,
+          // Optionally send updated backlog info if API supports it
+          backlogCount,
+          backlogSubjects
         }),
       })
 
@@ -181,7 +253,7 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
                           {profile.user.name?.charAt(0) || profile.firstName?.charAt(0) || 'U'}
                         </AvatarFallback>
                       </Avatar>
-                      
+
                       <div>
                         <h3 className="font-medium">
                           {profile.user.name || `${profile.firstName} ${profile.lastName}` || 'Unknown User'}
@@ -209,23 +281,23 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
                       <Badge className={getStatusColor(profile.kycStatus)}>
                         {profile.kycStatus.replace('_', ' ')}
                       </Badge>
-                      
+
                       <div className="flex items-center gap-2">
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => setSelectedProfile(profile)}>
+                            <Button variant="outline" size="sm" onClick={() => handleProfileSelect(profile)}>
                               <Eye className="w-4 h-4 mr-1" />
                               Review
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>Profile Review</DialogTitle>
                               <DialogDescription>
                                 Review student profile and documents for KYC verification
                               </DialogDescription>
                             </DialogHeader>
-                            
+
                             {selectedProfile && (
                               <div className="space-y-6">
                                 {/* Basic Information */}
@@ -234,19 +306,19 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
                                   <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                       <span className="text-muted-foreground">Name:</span>
-                                      <p>{selectedProfile.user.name || `${selectedProfile.firstName} ${selectedProfile.lastName}`}</p>
+                                      <p>{selectedProfile.user.name || `${selectedProfile.firstName || ''} ${selectedProfile.middleName || ''} ${selectedProfile.lastName || ''}`.trim() || 'Not provided'}</p>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Email:</span>
-                                      <p>{selectedProfile.user.email}</p>
+                                      <p>{selectedProfile.studentEmail || selectedProfile.user.email}</p>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">USN:</span>
-                                      <p>{selectedProfile.usn || 'Not provided'}</p>
+                                      <p>{selectedProfile.usn || selectedProfile.user.document?.usn || 'Not provided'}</p>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Branch:</span>
-                                      <p>{selectedProfile.branch || 'Not provided'}</p>
+                                      <p>{selectedProfile.branch || selectedProfile.department || 'Not provided'}</p>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Batch:</span>
@@ -255,6 +327,144 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
                                     <div>
                                       <span className="text-muted-foreground">Profile Completion:</span>
                                       <p>{selectedProfile.isComplete ? 'Complete' : `Step ${selectedProfile.completionStep}/7`}</p>
+                                    </div>
+                                    {selectedProfile.collegeName && (
+                                      <div>
+                                        <span className="text-muted-foreground">College:</span>
+                                        <p>{selectedProfile.collegeName}</p>
+                                      </div>
+                                    )}
+                                    {selectedProfile.entryType && (
+                                      <div>
+                                        <span className="text-muted-foreground">Entry Type:</span>
+                                        <p>{selectedProfile.entryType}</p>
+                                      </div>
+                                    )}
+                                    {selectedProfile.seatCategory && (
+                                      <div>
+                                        <span className="text-muted-foreground">Seat Category:</span>
+                                        <p>{selectedProfile.seatCategory}</p>
+                                      </div>
+                                    )}
+                                    {selectedProfile.branchMentor && (
+                                      <div>
+                                        <span className="text-muted-foreground">Branch Mentor:</span>
+                                        <p>{selectedProfile.branchMentor}</p>
+                                      </div>
+                                    )}
+                                    {(selectedProfile.callingMobile || selectedProfile.callingNumber) && (
+                                      <div>
+                                        <span className="text-muted-foreground">Phone:</span>
+                                        <p>{selectedProfile.callingMobile || selectedProfile.callingNumber}</p>
+                                      </div>
+                                    )}
+                                    {selectedProfile.user.document?.cgpa && (
+                                      <div>
+                                        <span className="text-muted-foreground">CGPA:</span>
+                                        <p>{selectedProfile.user.document.cgpa}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* Marks Cards Section */}
+                                <div>
+                                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    Marks Cards & Documents
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <DocumentPreview
+                                      url={selectedProfile.user.document?.tenthMarksCardLink || selectedProfile.tenthMarksCard}
+                                      label="10th Marks Card"
+                                      publicDomain={publicDomain}
+                                    />
+
+                                    <DocumentPreview
+                                      url={selectedProfile.user.document?.twelfthMarksCardLink || selectedProfile.twelfthMarksCard || selectedProfile.diplomaCertificates}
+                                      label="12th / Diploma Marks Card"
+                                      publicDomain={publicDomain}
+                                    />
+
+                                    {/* Semesters 1-8 from Document Model */}
+                                    {['sem1Link', 'sem2Link', 'sem3Link', 'sem4Link', 'sem5Link', 'sem6Link', 'sem7Link', 'sem8Link'].map((key, idx) => {
+                                      const link = selectedProfile.user.document?.[key]
+                                      if (!link) return null
+                                      return (
+                                        <DocumentPreview
+                                          key={key}
+                                          url={link}
+                                          label={`Semester ${idx + 1}`}
+                                          publicDomain={publicDomain}
+                                        />
+                                      )
+                                    })}
+
+                                    <DocumentPreview
+                                      url={selectedProfile.academicDocument}
+                                      label="Academic Document / Proof"
+                                      publicDomain={publicDomain}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Semester Marks Cards (Legacy / Profile Model) */}
+                                <div className="mt-4">
+                                  <h5 className="text-sm font-medium mb-2 text-muted-foreground">Semester Marks Cards (Legacy)</h5>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    {Array.isArray(selectedProfile.semesters) && selectedProfile.semesters.map((sem: any, index: number) => (
+                                      sem.marksCard && (
+                                        <DocumentPreview
+                                          key={index}
+                                          url={sem.marksCard}
+                                          label={`Semester ${sem.semester} (Legacy)`}
+                                          publicDomain={publicDomain}
+                                        />
+                                      )
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <Separator />
+
+                                {/* Backlog Information */}
+                                <div>
+                                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 text-orange-500" />
+                                    Backlog Verification
+                                  </h4>
+
+                                  <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="p-3 bg-slate-50 rounded-md border">
+                                      <span className="text-sm text-muted-foreground">Has Backlogs?</span>
+                                      <p className={`font-medium ${selectedProfile.hasBacklogs === 'yes' ? 'text-red-600' : 'text-green-600'}`}>
+                                        {selectedProfile.hasBacklogs?.toUpperCase() || 'NOT SPECIFIED'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="backlog-count">How many backlogs are there?</Label>
+                                      <Input
+                                        id="backlog-count"
+                                        placeholder="0"
+                                        value={backlogCount}
+                                        onChange={(e) => setBacklogCount(e.target.value)}
+                                        type="number"
+                                      />
+                                    </div>
+                                    <div className="grid gap-2">
+                                      <Label htmlFor="backlog-subjects">In which subjects? (Subject Codes/Titles)</Label>
+                                      <Textarea
+                                        id="backlog-subjects"
+                                        placeholder="e.g. 18MAT11 - Engineering Mathematics I"
+                                        value={backlogSubjects}
+                                        onChange={(e) => setBacklogSubjects(e.target.value)}
+                                        rows={3}
+                                      />
                                     </div>
                                   </div>
                                 </div>
@@ -339,6 +549,6 @@ export function KYCVerificationQueue({ pendingVerifications, adminId }: KYCVerif
           )}
         </CardContent>
       </Card>
-    </div>
+    </div >
   )
 }

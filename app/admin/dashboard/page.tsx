@@ -117,12 +117,12 @@ export default async function AdminDashboardPage() {
     // Monthly registration trends (last 6 months)
     prisma.$queryRaw<{ month: Date; count: bigint }[]>`
       SELECT 
-        DATE_TRUNC('month', "createdAt") as month,
+        DATE_TRUNC('month', "created_at") as month,
         COUNT(*) as count
       FROM users
       WHERE role = 'STUDENT' 
-        AND "createdAt" >= NOW() - INTERVAL '6 months'
-      GROUP BY DATE_TRUNC('month', "createdAt")
+        AND "created_at" >= NOW() - INTERVAL '6 months'
+      GROUP BY DATE_TRUNC('month', "created_at")
       ORDER BY month ASC
     `
   ])

@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { JobModel } from ".prisma/client/models/Job"
+import type { Job } from "@prisma/client"
 
-type JobWithCount = JobModel & {
+type JobWithCount = Job & {
     _count: { applications: number }
 }
 

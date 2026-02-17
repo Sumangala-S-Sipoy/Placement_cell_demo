@@ -7,7 +7,20 @@ export async function POST(request: NextRequest) {
   try {
     const { name, email, password } = await request.json()
 
-    if (!name || !email || !password) {
+    // Normalize email to prevent case/whitespace mismatches between
+    // registration and sign-in lookups.
+    const normalizedEmail = (email || "").toLowerCase().trim()
+
+    console.log("📝 SIGNUP DEBUG:", {
+      nameProvided: !!name,
+      emailProvided: !!email,
+      emailNormalized: normalizedEmail,
+      passwordLength: password?.length,
+      passwordProvided: !!password,
+    })
+
+    if (!name || !normalizedEmail || !password) {
+      console.error("❌ SIGNUP VALIDATION FAILED:", { name, email: normalizedEmail, password })
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -16,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email: normalizedEmail }
     })
 
     if (existingUser) {
@@ -28,20 +41,35 @@ export async function POST(request: NextRequest) {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12)
+    
+    console.log("🔐 PASSWORD HASHING DEBUG:", {
+      passwordLength: password.length,
+      hashedPasswordLength: hashedPassword.length,
+      hashedPasswordStart: hashedPassword.substring(0, 20),
+      isBcryptHash: hashedPassword.startsWith('$2a$') || hashedPassword.startsWith('$2b$'),
+    })
 
     // Create user
     const user = await prisma.user.create({
       data: {
         name,
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         role: "STUDENT"
       }
     })
+    
+    console.log("✅ USER CREATED:", {
+      userId: user.id,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      hasPassword: !!user.password,
+      passwordStoredLength: user.password?.length,
+    })
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, name)
+      await sendVerificationEmail(normalizedEmail, name)
     } catch (emailError) {
       console.error("Failed to send verification email:", emailError)
       // Don't fail registration if email fails

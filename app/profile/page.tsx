@@ -12,7 +12,14 @@ export default async function ProfilePage() {
 
   // Check if user has a profile
   const profile = await prisma.profile.findUnique({
-    where: { userId: session.user.id }
+    where: { userId: session.user.id },
+    include: {
+      user: {
+        include: {
+          document: true
+        }
+      }
+    }
   })
 
   // Allow viewing/editing profile even if complete
@@ -21,7 +28,7 @@ export default async function ProfilePage() {
   return (
     <main className="flex-1 bg-background min-h-screen">
       <div className="container mx-auto py-8 flex flex-col gap-6">
-        <ProfileCompletion />
+        <ProfileCompletion profile={profile} />
       </div>
     </main>
   )

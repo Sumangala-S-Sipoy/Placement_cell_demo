@@ -45,7 +45,8 @@ export default async function DashboardPage() {
     myApplications,
     upcomingEvents,
     totalStudents,
-    verifiedProfiles
+    verifiedProfiles,
+    recentJobs
   ] = await Promise.all([
     prisma.job.count().catch(() => 0),
     prisma.job.count({
@@ -69,7 +70,28 @@ export default async function DashboardPage() {
     }).catch(() => 0) : Promise.resolve(null),
     isAdmin ? prisma.profile.count({
       where: { kycStatus: 'VERIFIED' }
-    }).catch(() => 0) : Promise.resolve(null)
+    }).catch(() => 0) : Promise.resolve(null),
+    !isAdmin ? prisma.job.findMany({
+      where: {
+        status: 'ACTIVE',
+        isVisible: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 3,
+      select: {
+        id: true,
+        title: true,
+        companyName: true,
+        location: true,
+        jobType: true,
+        workMode: true,
+        salary: true,
+        deadline: true,
+        createdAt: true
+      }
+    }).catch(() => []) : Promise.resolve([])
   ])
 
   // Calculate profile completion
@@ -164,7 +186,7 @@ export default async function DashboardPage() {
                     KYC Verification Pending
                   </h3>
                   <p className="text-sm text-yellow-800 dark:text-yellow-300 mt-1">
-                    Your account is under review. Please upload your College ID card for verification.
+                    Please complete all steps and upload your College ID card to enable job applications.
                   </p>
                 </div>
                 <Link href="/profile">
@@ -342,11 +364,39 @@ export default async function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <IconBriefcase className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                <p>No active jobs at the moment</p>
-                <p className="text-xs mt-1">Check back later for new opportunities</p>
-              </div>
+              {!isAdmin && recentJobs && recentJobs.length > 0 ? (
+                <div className="space-y-3">
+                  {recentJobs.map((job) => (
+                    <Link key={job.id} href={`/jobs/${job.id}`}>
+                      <div className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <IconBuilding className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">{job.title}</h4>
+                          <p className="text-xs text-muted-foreground truncate">{job.companyName}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-muted-foreground">{job.location}</span>
+                            {job.salary && (
+                              <>
+                                <span className="text-xs text-muted-foreground">•</span>
+                                <span className="text-xs text-muted-foreground">{job.salary}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <IconArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconBriefcase className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>No active jobs at the moment</p>
+                  <p className="text-xs mt-1">Check back later for new opportunities</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -5,7 +5,14 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["nodemailer", "@prisma/client", "@aws-sdk/client-s3"],
   // Optimize images
   images: {
-    domains: ['localhost'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'documents.yourdomain.com',
+        port: '',
+        pathname: '/**',
+      },
+    ],
     formats: ['image/webp', 'image/avif'],
   },
   // Better performance

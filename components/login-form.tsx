@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { signIn } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -115,23 +115,19 @@ export function LoginForm({
             { duration: 10000 }
           )
         } else {
-          toast.error("Invalid email or password")
+          toast.error("Invalid email or password for student")
         }
       } else if (result?.ok) {
         toast.success("Welcome back!", {
           icon: <IconCircleCheck className="h-5 w-5 text-green-500" />,
         })
 
-        try {
-          const profileResponse = await fetch("/api/profile")
-          if (profileResponse.ok) {
-            const profileData = await profileResponse.json()
-            router.push(profileData.profile?.isComplete ? "/dashboard" : "/profile")
-          } else {
-            router.push("/profile")
-          }
-        } catch {
-          router.push("/profile")
+        // Fetch session to determine user role for redirect
+        const session = await getSession()
+        if (session?.user?.role === "ADMIN") {
+          router.push("/admin")
+        } else {
+          router.push("/dashboard")
         }
       }
     } catch {
@@ -143,7 +139,7 @@ export function LoginForm({
 
   const handleGoogleLogin = () => {
     setIsGoogleLoading(true)
-    signIn("google", { callbackUrl: "/profile" })
+    signIn("google", { callbackUrl: "/dashboard" })
   }
 
   return (

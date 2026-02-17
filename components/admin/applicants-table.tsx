@@ -63,6 +63,10 @@ interface Applicant {
     cgpa: number | null
     appliedAt: Date
     resumeUrl: string
+    responses: {
+        field: { label: string }
+        value: string | null
+    }[]
 }
 
 interface ApplicantsTableProps {
@@ -318,6 +322,7 @@ export function ApplicantsTable({ jobId, jobTitle, applicants }: ApplicantsTable
                                         <TableHead>USN</TableHead>
                                         <TableHead>Branch</TableHead>
                                         <TableHead>CGPA</TableHead>
+                                        <TableHead>Custom Responses</TableHead>
                                         <TableHead>Applied</TableHead>
                                         <TableHead className="w-12"></TableHead>
                                     </TableRow>
@@ -368,6 +373,16 @@ export function ApplicantsTable({ jobId, jobTitle, applicants }: ApplicantsTable
                                                 ) : (
                                                     "-"
                                                 )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="text-xs space-y-1 max-w-[200px]">
+                                                    {applicant.responses.length > 0 ? applicant.responses.map((resp, i) => (
+                                                        <div key={i} className="flex flex-col border-b last:border-0 pb-1">
+                                                            <span className="text-muted-foreground font-semibold uppercase text-[10px]">{resp.field.label}</span>
+                                                            <span className="truncate" title={resp.value || "No response"}>{resp.value || "No response"}</span>
+                                                        </div>
+                                                    )) : <span className="text-muted-foreground italic">No custom fields</span>}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <span className="text-sm text-muted-foreground">

@@ -80,6 +80,13 @@ export default async function JobApplicantsPage({ params }: { params: Promise<{ 
                                     email: true,
                                     resume: true,
                                 }
+                            },
+                            responses: {
+                                include: {
+                                    field: {
+                                        select: { label: true }
+                                    }
+                                }
                             }
                         }
                     }
@@ -117,6 +124,7 @@ export default async function JobApplicantsPage({ params }: { params: Promise<{ 
             cgpa: profile?.cgpa ?? null,
             appliedAt: app.appliedAt,
             resumeUrl: app.resumeUsed || profile?.resume || '',
+            responses: (app as any).responses || [],
         }
     })
 

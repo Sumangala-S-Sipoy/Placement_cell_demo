@@ -11,11 +11,10 @@ import { toast } from "sonner"
 
 interface ReviewStepProps {
   onPrevious: () => void
-  onSubmit?: () => Promise<void>
   formData: any
 }
 
-export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) {
+export function ReviewStep({ onPrevious, formData }: ReviewStepProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
 
@@ -24,35 +23,181 @@ export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) 
 
     setIsSubmitting(true)
     try {
-      // Call the parent's submit handler if provided
-      if (onSubmit) {
-        await onSubmit()
-      } else {
-        // Fallback: direct API call to mark profile as complete
-        const response = await fetch("/api/profile", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            isComplete: true,
-            kycStatus: "PENDING",
-            completionStep: 5
-          })
-        })
+      // Flatten formData into DB-compatible field names
+      const personalInfo = formData?.personalInfo || {}
+      const contactDetails = formData?.contactDetails || {}
+      const addressDetails = formData?.addressDetails || {}
+      const tenthDetails = formData?.tenthDetails || {}
+      const twelfthDiplomaDetails = formData?.twelfthDiplomaDetails || {}
+      const engineeringDetails = formData?.engineeringDetails || {}
+      const engineeringAcademicDetails = formData?.engineeringAcademicDetails || {}
+      const collegeIdDetails = formData?.collegeIdDetails || {}
 
-        if (!response.ok) {
-          throw new Error("Failed to submit profile")
-        }
+      const dbData: Record<string, any> = {
+        // Personal Info
+        firstName: personalInfo.firstName || undefined,
+        middleName: personalInfo.middleName || ".",
+        lastName: personalInfo.lastName || undefined,
+        dateOfBirth: personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth).toISOString() : undefined,
+        gender: personalInfo.gender || undefined,
+        bloodGroup: personalInfo.bloodGroup || undefined,
+        state: personalInfo.state || undefined,
+        stateOfDomicile: personalInfo.state || undefined,
+        nationality: personalInfo.nationality || undefined,
+        category: personalInfo.category || undefined,
+        casteCategory: personalInfo.category || undefined,
+        profilePhoto: personalInfo.profilePhoto || undefined,
 
-        toast.success("Profile submitted successfully! Your KYC verification is pending.", {
-          duration: 5000,
-          description: "Please visit the Placement Cell with your documents."
-        })
+        // Contact Details
+        studentEmail: contactDetails.studentEmail || contactDetails.email || undefined,
+        email: contactDetails.studentEmail || contactDetails.email || undefined,
+        callingMobile: contactDetails.callingMobile || contactDetails.callingNumber || undefined,
+        callingNumber: contactDetails.callingMobile || contactDetails.callingNumber || undefined,
+        whatsappMobile: contactDetails.whatsappMobile || contactDetails.whatsappNumber || undefined,
+        whatsappNumber: contactDetails.whatsappMobile || contactDetails.whatsappNumber || undefined,
+        alternativeMobile: contactDetails.alternativeMobile || contactDetails.altNumber || undefined,
+        altNumber: contactDetails.alternativeMobile || contactDetails.altNumber || undefined,
 
-        // Redirect to dashboard after 2 seconds
-        setTimeout(() => {
-          window.location.href = "/dashboard"
-        }, 2000)
+        // Parent Details
+        fatherFirstName: contactDetails.fatherFirstName || undefined,
+        fatherMiddleName: contactDetails.fatherMiddleName || ".",
+        fatherLastName: contactDetails.fatherLastName || undefined,
+        fatherName: contactDetails.fatherName || undefined,
+        fatherMobile: contactDetails.fatherMobile || undefined,
+        fatherEmail: contactDetails.fatherEmail || undefined,
+        fatherOccupation: contactDetails.fatherOccupation || undefined,
+        motherFirstName: contactDetails.motherFirstName || undefined,
+        motherMiddleName: contactDetails.motherMiddleName || ".",
+        motherLastName: contactDetails.motherLastName || undefined,
+        motherName: contactDetails.motherName || undefined,
+        motherMobile: contactDetails.motherMobile || undefined,
+        motherEmail: contactDetails.motherEmail || undefined,
+        motherOccupation: contactDetails.motherOccupation || undefined,
+
+        // Address Details
+        currentHouse: addressDetails.currentHouse || undefined,
+        currentCross: addressDetails.currentCross || undefined,
+        currentArea: addressDetails.currentArea || undefined,
+        currentDistrict: addressDetails.currentDistrict || undefined,
+        currentCity: addressDetails.currentCity || undefined,
+        currentPincode: addressDetails.currentPincode || undefined,
+        currentState: addressDetails.currentState || undefined,
+        sameAsCurrent: addressDetails.sameAsCurrent || false,
+        permanentHouse: addressDetails.permanentHouse || undefined,
+        permanentCross: addressDetails.permanentCross || undefined,
+        permanentArea: addressDetails.permanentArea || undefined,
+        permanentDistrict: addressDetails.permanentDistrict || undefined,
+        permanentCity: addressDetails.permanentCity || undefined,
+        permanentPincode: addressDetails.permanentPincode || undefined,
+        permanentState: addressDetails.permanentState || undefined,
+
+        // 10th Details
+        tenthSchool: tenthDetails.tenthSchool || tenthDetails.tenthSchoolName || undefined,
+        tenthSchoolName: tenthDetails.tenthSchoolName || tenthDetails.tenthSchool || undefined,
+        tenthArea: tenthDetails.tenthArea || undefined,
+        tenthDistrict: tenthDetails.tenthDistrict || undefined,
+        tenthCity: tenthDetails.tenthCity || undefined,
+        tenthPincode: tenthDetails.tenthPincode || undefined,
+        tenthState: tenthDetails.tenthState || undefined,
+        tenthBoard: tenthDetails.tenthBoard || undefined,
+        tenthPassingYear: tenthDetails.tenthPassingYear ? parseInt(tenthDetails.tenthPassingYear) : undefined,
+        tenthPassingMonth: tenthDetails.tenthPassingMonth || undefined,
+        tenthPercentage: tenthDetails.tenthPercentage ? parseFloat(tenthDetails.tenthPercentage) : undefined,
+        tenthAreaDistrictCity: tenthDetails.tenthAreaDistrictCity || undefined,
+        tenthMarksCard: tenthDetails.tenthMarksCard || undefined,
+
+        // 12th / Diploma Details
+        academicLevel: twelfthDiplomaDetails.twelfthOrDiploma || undefined,
+        twelfthSchool: twelfthDiplomaDetails.twelfthSchool || twelfthDiplomaDetails.twelfthSchoolName || undefined,
+        twelfthSchoolName: twelfthDiplomaDetails.twelfthSchoolName || twelfthDiplomaDetails.twelfthSchool || undefined,
+        twelfthArea: twelfthDiplomaDetails.twelfthArea || undefined,
+        twelfthDistrict: twelfthDiplomaDetails.twelfthDistrict || undefined,
+        twelfthCity: twelfthDiplomaDetails.twelfthCity || undefined,
+        twelfthPincode: twelfthDiplomaDetails.twelfthPincode || undefined,
+        twelfthState: twelfthDiplomaDetails.twelfthState || undefined,
+        twelfthBoard: twelfthDiplomaDetails.twelfthBoard || undefined,
+        twelfthPassingYear: twelfthDiplomaDetails.twelfthPassingYear ? parseInt(twelfthDiplomaDetails.twelfthPassingYear) : undefined,
+        twelfthPassingMonth: twelfthDiplomaDetails.twelfthPassingMonth || undefined,
+        twelfthPercentage: (twelfthDiplomaDetails.twelfthStatePercentage || twelfthDiplomaDetails.twelfthPercentage) ? parseFloat(twelfthDiplomaDetails.twelfthStatePercentage || twelfthDiplomaDetails.twelfthPercentage) : undefined,
+        twelfthMarksCard: twelfthDiplomaDetails.twelfthMarksCard || undefined,
+        twelfthCbseSubjects: twelfthDiplomaDetails.twelfthCbseSubjects || undefined,
+        twelfthCbseMarks: twelfthDiplomaDetails.twelfthCbseMarks || undefined,
+        twelfthIcseMarks: twelfthDiplomaDetails.twelfthIcseMarks || undefined,
+
+        diplomaCollege: twelfthDiplomaDetails.diplomaCollege || undefined,
+        diplomaArea: twelfthDiplomaDetails.diplomaArea || undefined,
+        diplomaDistrict: twelfthDiplomaDetails.diplomaDistrict || undefined,
+        diplomaCity: twelfthDiplomaDetails.diplomaCity || undefined,
+        diplomaPincode: twelfthDiplomaDetails.diplomaPincode || undefined,
+        diplomaState: twelfthDiplomaDetails.diplomaState || undefined,
+        diplomaPercentage: twelfthDiplomaDetails.diplomaPercentage ? parseFloat(twelfthDiplomaDetails.diplomaPercentage) : undefined,
+        diplomaCertificates: twelfthDiplomaDetails.diplomaCertificates || twelfthDiplomaDetails.diplomaCertificate || undefined,
+        diplomaFirstYear: twelfthDiplomaDetails.diplomaFirstYear || undefined,
+        diplomaSecondYear: twelfthDiplomaDetails.diplomaSecondYear || undefined,
+        diplomaThirdYear: twelfthDiplomaDetails.diplomaThirdYear || undefined,
+        diplomaSemesters: twelfthDiplomaDetails.diplomaSemesters || undefined,
+
+        // Engineering Details
+        collegeName: engineeringDetails.collegeName || undefined,
+        usn: engineeringDetails.usn || undefined,
+        branch: engineeringDetails.branch || undefined,
+        entryType: engineeringDetails.entryType || undefined,
+        seatCategory: engineeringDetails.seatCategory || undefined,
+        libraryId: engineeringDetails.libraryId || undefined,
+        batch: engineeringDetails.batch || undefined,
+        branchMentor: engineeringDetails.branchMentor || undefined,
+        linkedinLink: engineeringDetails.linkedinLink || undefined,
+        githubLink: engineeringDetails.githubLink || undefined,
+        leetcodeLink: engineeringDetails.leetcodeLink || undefined,
+        district: engineeringDetails.district || undefined,
+        pincode: engineeringDetails.pincode || undefined,
+
+        // Engineering Academic Details
+        finalCgpa: engineeringAcademicDetails.finalCgpa ? parseFloat(engineeringAcademicDetails.finalCgpa) : undefined,
+        hasBacklogs: engineeringAcademicDetails.hasBacklogs || undefined,
+        activeBacklogs: engineeringAcademicDetails.hasBacklogs === "yes",
+        backlogs: engineeringAcademicDetails.backlogs || undefined,
+        semesters: engineeringDetails.semesters || undefined,
+        resumeUpload: engineeringDetails.resumeUpload || undefined,
+        resume: engineeringDetails.resumeUpload || undefined,
+
+        // College ID
+        collegeIdCard: collegeIdDetails.collegeIdCard || undefined,
+
+        // Completion flags
+        isComplete: true,
+        kycStatus: "PENDING",
+        completionStep: 6,
       }
+
+      // Remove undefined values
+      Object.keys(dbData).forEach(key => {
+        if (dbData[key] === undefined) {
+          delete dbData[key]
+        }
+      })
+
+      // Send all form data to the API
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dbData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to submit profile")
+      }
+
+      toast.success("Profile submitted successfully! Your KYC verification is pending.", {
+        duration: 5000,
+        description: "Please visit the Placement Cell with your documents."
+      })
+
+      // Redirect to dashboard after 2 seconds
+      setTimeout(() => {
+        window.location.href = "/dashboard"
+      }, 2000)
     } catch (error) {
       console.error("Submit error:", error)
       toast.error("Failed to submit profile. Please try again.")
@@ -125,11 +270,11 @@ export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) 
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Category</p>
-                <Badge variant="secondary">{personalInfo.casteCategory || "Not provided"}</Badge>
+                <Badge variant="secondary">{personalInfo.category || personalInfo.casteCategory || "Not provided"}</Badge>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">State of Domicile</p>
-                <p className="font-medium">{personalInfo.stateOfDomicile || "Not provided"}</p>
+                <p className="font-medium">{personalInfo.state || personalInfo.stateOfDomicile || "Not provided"}</p>
               </div>
             </div>
           </CardContent>
@@ -144,20 +289,20 @@ export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Student Email</p>
-                <p className="font-medium">{contactDetails.email || "Not provided"}</p>
+                <p className="font-medium">{contactDetails.studentEmail || contactDetails.email || "Not provided"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Calling Number</p>
-                <p className="font-medium">{contactDetails.callingMobile || "Not provided"}</p>
+                <p className="font-medium">{contactDetails.callingMobile || contactDetails.callingNumber || "Not provided"}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">WhatsApp Number</p>
-                <p className="font-medium">{contactDetails.whatsappMobile || "Not provided"}</p>
+                <p className="font-medium">{contactDetails.whatsappMobile || contactDetails.whatsappNumber || "Not provided"}</p>
               </div>
-              {contactDetails.alternativeMobile && (
+              {(contactDetails.alternativeMobile || contactDetails.altNumber) && (
                 <div>
                   <p className="text-sm text-muted-foreground">Alternative Number</p>
-                  <p className="font-medium">{contactDetails.alternativeMobile}</p>
+                  <p className="font-medium">{contactDetails.alternativeMobile || contactDetails.altNumber}</p>
                 </div>
               )}
             </div>
@@ -323,7 +468,7 @@ export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) 
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Branch Mentor</p>
-                <p className="font-medium">{engineeringDetails.branchMentorName || "Not provided"}</p>
+                <p className="font-medium">{engineeringDetails.branchMentor || engineeringDetails.branchMentorName || "Not provided"}</p>
               </div>
             </div>
 
@@ -345,22 +490,22 @@ export function ReviewStep({ onPrevious, onSubmit, formData }: ReviewStepProps) 
 
             <h4 className="font-medium">Social Profiles</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {engineeringDetails.linkedin && (
+              {(engineeringDetails.linkedinLink || engineeringDetails.linkedin) && (
                 <div>
                   <p className="text-sm text-muted-foreground">LinkedIn</p>
-                  <p className="font-medium truncate">{engineeringDetails.linkedin}</p>
+                  <p className="font-medium truncate">{engineeringDetails.linkedinLink || engineeringDetails.linkedin}</p>
                 </div>
               )}
-              {engineeringDetails.github && (
+              {(engineeringDetails.githubLink || engineeringDetails.github) && (
                 <div>
                   <p className="text-sm text-muted-foreground">GitHub</p>
-                  <p className="font-medium truncate">{engineeringDetails.github}</p>
+                  <p className="font-medium truncate">{engineeringDetails.githubLink || engineeringDetails.github}</p>
                 </div>
               )}
-              {engineeringDetails.leetcode && (
+              {(engineeringDetails.leetcodeLink || engineeringDetails.leetcode) && (
                 <div>
                   <p className="text-sm text-muted-foreground">LeetCode</p>
-                  <p className="font-medium truncate">{engineeringDetails.leetcode}</p>
+                  <p className="font-medium truncate">{engineeringDetails.leetcodeLink || engineeringDetails.leetcode}</p>
                 </div>
               )}
             </div>

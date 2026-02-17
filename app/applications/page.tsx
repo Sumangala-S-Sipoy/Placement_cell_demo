@@ -74,15 +74,12 @@ export default function ApplicationsPage() {
                 setApplications(data.applications)
                 setTotalPages(data.pagination?.pages || 1)
 
-                // Generate QR codes for each application
+                // Generate QR codes for each application using Google Form URL
                 const newQrCodes: Record<string, string> = {}
                 for (const app of data.applications) {
-                    const qrData = JSON.stringify({
-                        applicationId: app.id,
-                        jobId: app.job.id,
-                        company: app.job.companyName
-                    })
-                    newQrCodes[app.id] = await QRCode.toDataURL(qrData)
+                    // Use Google Form URL from job, or default placeholder
+                    const googleFormUrl = app.job.googleFormUrl || "https://forms.gle/placement-attendance-form"
+                    newQrCodes[app.id] = await QRCode.toDataURL(googleFormUrl)
                 }
                 setQrCodes(newQrCodes)
             }
@@ -218,10 +215,24 @@ export default function ApplicationsPage() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex gap-2">
+                                    <div className="flex flex-col gap-4 items-center">
+                                        {/* QR Code on the right side */}
+                                        {qrCodes[app.id] && (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <img
+                                                    src={qrCodes[app.id]}
+                                                    alt="Application QR Code"
+                                                    className="w-32 h-32 border-2 border-gray-200 rounded-lg p-2 bg-white"
+                                                />
+                                                <p className="text-xs text-muted-foreground text-center max-w-[120px]">
+                                                    Scan for attendance
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col gap-2 w-full">
                                             <Link href={`/jobs/${app.job.id}`}>
-                                                <Button variant="outline" size="sm">
+                                                <Button variant="outline" size="sm" className="w-full">
                                                     <ExternalLink className="w-4 h-4 mr-1" />
                                                     View Job
                                                 </Button>
@@ -229,36 +240,11 @@ export default function ApplicationsPage() {
 
                                             {app.resumeUsed && (
                                                 <a href={app.resumeUsed} target="_blank" rel="noopener noreferrer">
-                                                    <Button variant="outline" size="sm">
+                                                    <Button variant="outline" size="sm" className="w-full">
                                                         <FileText className="w-4 h-4 mr-1" />
                                                         Resume
                                                     </Button>
                                                 </a>
-                                            )}
-
-                                            {qrCodes[app.id] && (
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="outline" size="sm">
-                                                            <QrCode className="w-4 h-4 mr-1" />
-                                                            QR
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Your Application QR Code</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Show this QR code for attendance at {app.job.companyName} events
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <div className="flex justify-center py-4">
-                                                            <img src={qrCodes[app.id]} alt="QR Code" className="w-48 h-48" />
-                                                        </div>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Close</AlertDialogCancel>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
                                             )}
                                         </div>
                                     </div>

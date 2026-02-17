@@ -11,7 +11,8 @@ import {
   Shield,
   Building,
   Briefcase,
-  LogOut
+  LogOut,
+  FileText
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 
@@ -66,6 +67,11 @@ const navigationItems = [
     title: "Analytics",
     url: "/admin/analytics",
     icon: BarChart3,
+  },
+  {
+    title: "Documents",
+    url: "/admin/documents",
+    icon: FileText,
   },
 ]
 

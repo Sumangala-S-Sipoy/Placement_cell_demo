@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import { GripVerticalIcon } from "lucide-react"
-import * as ResizablePrimitive from "react-resizable-panels"
+import * as ResizablePrimitiveModule from "react-resizable-panels"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ResizablePrimitive = ResizablePrimitiveModule as any
 
 import { cn } from "@/lib/utils"
 

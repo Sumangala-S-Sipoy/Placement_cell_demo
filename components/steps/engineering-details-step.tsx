@@ -92,8 +92,79 @@ export function EngineeringDetailsStep({ onNext, onPrevious, initialData = {} }:
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isUploading, setIsUploading] = useState<Record<string, boolean>>({})
 
-  const handleInputChange = (field: string, value: string | boolean | File | null) => {
+  const uploadFile = async (file: File, type: string) => {
+    const formDataToUpload = new FormData()
+    formDataToUpload.append("file", file)
+    formDataToUpload.append("type", type)
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formDataToUpload,
+    })
+
+    if (!response.ok) {
+      throw new Error("Upload failed")
+    }
+
+    const result = await response.json()
+    return result.url
+  }
+
+  const handleFileUpload = async (field: string, file: File | null) => {
+    if (!file) {
+      handleInputChange(field, null)
+      return
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, [field]: "File size must be less than 20MB" }))
+      return
+    }
+
+    setIsUploading((prev) => ({ ...prev, [field]: true }))
+    setErrors((prev) => ({ ...prev, [field]: "" }))
+
+    try {
+      const uploadType = field === "resumeUpload" ? "resume" : field
+      const url = await uploadFile(file, uploadType)
+      handleInputChange(field, url)
+    } catch (error) {
+      console.error(`Upload failed for ${field}:`, error)
+      setErrors((prev) => ({ ...prev, [field]: "Failed to upload document. Please try again." }))
+    } finally {
+      setIsUploading((prev) => ({ ...prev, [field]: false }))
+    }
+  }
+
+  const handleMarksCardUpload = async (semesterIndex: number, file: File | null) => {
+    if (!file) {
+      handleSemesterChange(semesterIndex, "marksCard", null)
+      return
+    }
+
+    const fieldKey = `sem${semesterIndex + 1}_marksCard`
+    if (file.size > 20 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, [fieldKey]: "File size must be less than 20MB" }))
+      return
+    }
+
+    setIsUploading((prev) => ({ ...prev, [fieldKey]: true }))
+    setErrors((prev) => ({ ...prev, [fieldKey]: "" }))
+
+    try {
+      const url = await uploadFile(file, "semesterMarksCard")
+      handleSemesterChange(semesterIndex, "marksCard", url)
+    } catch (error) {
+      console.error(`Upload failed for semester ${semesterIndex + 1}:`, error)
+      setErrors((prev) => ({ ...prev, [fieldKey]: "Failed to upload marks card. Please try again." }))
+    } finally {
+      setIsUploading((prev) => ({ ...prev, [fieldKey]: false }))
+    }
+  }
+
+  const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => {
       const newData = { ...prev, [field]: value }
 
@@ -114,7 +185,7 @@ export function EngineeringDetailsStep({ onNext, onPrevious, initialData = {} }:
     }
   }
 
-  const handleSemesterChange = (semesterIndex: number, field: string, value: string | boolean | File | null) => {
+  const handleSemesterChange = (semesterIndex: number, field: string, value: any) => {
     setFormData((prev) => ({
       ...prev,
       semesters: prev.semesters.map((sem: SemesterData, index: number) => (index === semesterIndex ? { ...sem, [field]: value } : sem)),
@@ -475,13 +546,17 @@ export function EngineeringDetailsStep({ onNext, onPrevious, initialData = {} }:
             )}
 
             <DocumentUpload
-              onFileChange={(file) => handleInputChange("resumeUpload", file)}
+              onFileChange={(file) => handleFileUpload("resumeUpload", file)}
               accept="application/pdf"
               maxSizeMB={10}
               label="Upload Professional Resume"
               required={true}
               error={errors.resumeUpload}
-              initialFile={formData.resumeUpload as File | null}
+              initialFile={
+                typeof formData.resumeUpload === 'string'
+                  ? { url: formData.resumeUpload, name: "Uploaded Resume" }
+                  : formData.resumeUpload as File | null
+              }
               description="• File name format: USN_Resume.pdf<br>• Maximum file size: 10MB<br>• PDF format only<br>• Include professional photo in resume"
               placeholder="Drop your resume PDF here or click to select"
             />
@@ -581,13 +656,17 @@ export function EngineeringDetailsStep({ onNext, onPrevious, initialData = {} }:
                   </div>
 
                   <DocumentUpload
-                    onFileChange={(file) => handleSemesterChange(index, "marksCard", file)}
+                    onFileChange={(file) => handleMarksCardUpload(index, file)}
                     accept="image/jpeg,image/png,application/pdf"
                     maxSizeMB={10}
                     label={`Upload Semester ${semester.semester} Marks Card`}
                     required={true}
                     error={errors[`sem${index}_marks`]}
-                    initialFile={semester.marksCard as File | null}
+                    initialFile={
+                      typeof semester.marksCard === 'string'
+                        ? { url: semester.marksCard, name: `Semester ${semester.semester} Marks Card` }
+                        : semester.marksCard as File | null
+                    }
                     description={`Format: USN_Sem${semester.semester}_MarksCard.jpg/pdf • Max 10MB • JPG/PNG/PDF`}
                     placeholder="Drop your marks card here or click to select"
                   />

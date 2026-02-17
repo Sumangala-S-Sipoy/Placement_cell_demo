@@ -92,7 +92,7 @@ export function SignupForm({
 
   const handleGoogleSignup = () => {
     setIsGoogleLoading(true)
-    signIn("google", { callbackUrl: "/dashboard" })
+    signIn("google", { callbackUrl: "/api/auth/callback" })
   }
 
   return (

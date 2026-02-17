@@ -12,15 +12,18 @@ function determineTier(salary: number | null, isDreamOffer: boolean): string {
 }
 
 // Helper to notify eligible students about new job
-async function notifyEligibleStudents(jobId: string, jobTitle: string, companyName: string, allowedBranches: string[]) {
+async function notifyEligibleStudents(jobId: string, jobTitle: string, companyName: string, allowedBranches: string[] | null) {
     try {
         // Get eligible students (with verified KYC and matching branch)
+        // If allowedBranches is null or empty, it means ALL branches are allowed
+        const branchFilter = allowedBranches && allowedBranches.length > 0
+            ? { branch: { in: allowedBranches as any } }
+            : {}
+
         const eligibleProfiles = await prisma.profile.findMany({
             where: {
                 kycStatus: "VERIFIED",
-                ...(allowedBranches.length > 0 && {
-                    branch: { in: allowedBranches as any }
-                })
+                ...branchFilter
             },
             select: { userId: true }
         })
@@ -155,7 +158,6 @@ export async function POST(request: NextRequest) {
             title: sanitizeInput(data.title),
             companyId: data.companyId || null,
             companyName: sanitizeInput(data.companyName),
-            companyLogo: data.companyLogo ? sanitizeInput(data.companyLogo) : null,
             description: data.description, // HTML content
             location: sanitizeInput(data.location),
             category: data.category || "FTE",
@@ -166,18 +168,24 @@ export async function POST(request: NextRequest) {
             minCGPA: data.minCGPA ? parseFloat(data.minCGPA) : null,
             allowedBranches: data.allowedBranches || [],
             eligibleBatch: data.eligibleBatch ? sanitizeInput(data.eligibleBatch) : null,
-            maxBacklogs: data.maxBacklogs !== undefined ? parseInt(data.maxBacklogs) : 0,
+            maxBacklogs: (data.maxBacklogs !== undefined && data.maxBacklogs !== null) ? parseInt(data.maxBacklogs) : null,
             salary: data.salary ? sanitizeInput(data.salary) : null,
             minSalary: data.minSalary ? parseFloat(data.minSalary) : null,
             maxSalary: maxSalary,
-            requiredSkills: data.requiredSkills || [],
-            preferredSkills: data.preferredSkills || [],
             deadline: data.deadline ? new Date(data.deadline) : null,
             startDate: data.startDate ? new Date(data.startDate) : null,
             noOfPositions: data.noOfPositions ? parseInt(data.noOfPositions) : 1,
             status: data.status || "DRAFT",
             isVisible: data.isVisible !== undefined ? data.isVisible : true,
-            postedBy: session.user.id
+            postedBy: session.user.id,
+            customFields: data.customFields && Array.isArray(data.customFields) ? {
+                create: data.customFields.map((field: any) => ({
+                    label: field.label,
+                    type: field.type,
+                    required: field.required || false,
+                    options: field.options || null
+                }))
+            } : undefined
         }
 
         const job = await prisma.job.create({
@@ -259,7 +267,6 @@ export async function PUT(request: NextRequest) {
         if (updateData.title) sanitizedData.title = sanitizeInput(updateData.title)
         if (updateData.companyId !== undefined) sanitizedData.companyId = updateData.companyId
         if (updateData.companyName) sanitizedData.companyName = sanitizeInput(updateData.companyName)
-        if (updateData.companyLogo !== undefined) sanitizedData.companyLogo = updateData.companyLogo ? sanitizeInput(updateData.companyLogo) : null
         if (updateData.description) sanitizedData.description = updateData.description
         if (updateData.location) sanitizedData.location = sanitizeInput(updateData.location)
         if (updateData.category) sanitizedData.category = updateData.category
@@ -268,19 +275,30 @@ export async function PUT(request: NextRequest) {
         if (updateData.jobType) sanitizedData.jobType = updateData.jobType
         if (updateData.workMode) sanitizedData.workMode = updateData.workMode
         if (updateData.minCGPA !== undefined) sanitizedData.minCGPA = updateData.minCGPA ? parseFloat(updateData.minCGPA) : null
-        if (updateData.allowedBranches !== undefined) sanitizedData.allowedBranches = updateData.allowedBranches
+        if (updateData.allowedBranches !== undefined) sanitizedData.allowedBranches = updateData.allowedBranches || []
         if (updateData.eligibleBatch !== undefined) sanitizedData.eligibleBatch = updateData.eligibleBatch ? sanitizeInput(updateData.eligibleBatch) : null
-        if (updateData.maxBacklogs !== undefined) sanitizedData.maxBacklogs = parseInt(updateData.maxBacklogs)
+        if (updateData.maxBacklogs !== undefined) sanitizedData.maxBacklogs = (updateData.maxBacklogs !== null) ? parseInt(updateData.maxBacklogs) : null
         if (updateData.salary !== undefined) sanitizedData.salary = updateData.salary ? sanitizeInput(updateData.salary) : null
         if (updateData.minSalary !== undefined) sanitizedData.minSalary = updateData.minSalary ? parseFloat(updateData.minSalary) : null
         if (updateData.maxSalary !== undefined) sanitizedData.maxSalary = updateData.maxSalary ? parseFloat(updateData.maxSalary) : null
-        if (updateData.requiredSkills !== undefined) sanitizedData.requiredSkills = updateData.requiredSkills
-        if (updateData.preferredSkills !== undefined) sanitizedData.preferredSkills = updateData.preferredSkills
         if (updateData.deadline !== undefined) sanitizedData.deadline = updateData.deadline ? new Date(updateData.deadline) : null
         if (updateData.startDate !== undefined) sanitizedData.startDate = updateData.startDate ? new Date(updateData.startDate) : null
         if (updateData.noOfPositions !== undefined) sanitizedData.noOfPositions = parseInt(updateData.noOfPositions)
         if (updateData.status) sanitizedData.status = updateData.status
         if (updateData.isVisible !== undefined) sanitizedData.isVisible = updateData.isVisible
+
+        // Handle custom fields update
+        if (updateData.customFields && Array.isArray(updateData.customFields)) {
+            sanitizedData.customFields = {
+                deleteMany: {}, // Simple approach: replace all
+                create: updateData.customFields.map((field: any) => ({
+                    label: field.label,
+                    type: field.type,
+                    required: field.required || false,
+                    options: field.options || null
+                }))
+            }
+        }
 
         // Check if deadline was extended
         const deadlineExtended = updateData.deadline &&
@@ -294,12 +312,15 @@ export async function PUT(request: NextRequest) {
 
         // If deadline was extended, notify all students
         if (deadlineExtended) {
+            // Re-fetch eligible profiles based on new/existing criteria
+            const branchFilter = job.allowedBranches && job.allowedBranches.length > 0
+                ? { branch: { in: job.allowedBranches as any } }
+                : {}
+
             const eligibleProfiles = await prisma.profile.findMany({
                 where: {
                     kycStatus: "VERIFIED",
-                    ...(job.allowedBranches.length > 0 && {
-                        branch: { in: job.allowedBranches as any }
-                    })
+                    ...branchFilter
                 },
                 select: { userId: true }
             })

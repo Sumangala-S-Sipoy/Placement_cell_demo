@@ -73,12 +73,20 @@ function canApplyToTier(studentTier: string | null, jobTier: string, isDreamOffe
     return { eligible: true }
 }
 
+// Helper to extract batch year (e.g. from "2022 - 2026" get "2026")
+function getBatchYear(batch: string | null | undefined): string {
+    if (!batch || typeof batch !== 'string') return ""
+    const parts = batch.split('-')
+    return parts[parts.length - 1].trim()
+}
+
 // GET - List active jobs for students
 export async function GET(request: NextRequest) {
     try {
         const session = await auth()
 
         if (!session?.user?.id) {
+            console.log("Unauthorized access attempt to GET /api/jobs")
             return NextResponse.json(
                 { error: "Unauthorized" },
                 { status: 401 }
@@ -88,6 +96,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const search = searchParams.get("search") || ""
         const category = searchParams.get("category")
+        const jobType = searchParams.get("jobType") // Add jobType parameter
         const workMode = searchParams.get("workMode")
         const tier = searchParams.get("tier")
         const page = parseInt(searchParams.get("page") || "1")
@@ -112,6 +121,10 @@ export async function GET(request: NextRequest) {
             where.category = category
         }
 
+        if (jobType && jobType !== "ALL") {
+            where.jobType = jobType
+        }
+
         if (workMode && workMode !== "ALL") {
             where.workMode = workMode
         }
@@ -119,6 +132,8 @@ export async function GET(request: NextRequest) {
         if (tier && tier !== "ALL") {
             where.tier = tier
         }
+
+        console.log("Fetching jobs with where clause:", JSON.stringify(where, null, 2))
 
         // Get user's profile and placement status
         const [userProfile, userPlacements] = await Promise.all([
@@ -141,7 +156,7 @@ export async function GET(request: NextRequest) {
 
         // Determine highest tier placement
         let highestTierPlacement: string | null = null
-        const tierOrder = ["TIER_1", "TIER_2", "TIER_3"]
+        const tierOrder = ["TIER_1", "TIER_2", "TIER_3", "DREAM"]
         for (const placement of userPlacements) {
             if (!placement.isException) {
                 if (!highestTierPlacement || tierOrder.indexOf(placement.tier) < tierOrder.indexOf(highestTierPlacement)) {
@@ -223,61 +238,79 @@ export async function GET(request: NextRequest) {
         const cgpa = userProfile?.finalCgpa || userProfile?.cgpa || 0
 
         const jobsWithEligibility = jobs.map((job: JobWithDetails) => {
-            let isEligible = true
-            const eligibilityIssues: string[] = []
+            try {
+                let isEligible = true
+                const eligibilityIssues: string[] = []
 
-            // Check tier eligibility first
-            const tierCheck = canApplyToTier(highestTierPlacement, job.tier, job.isDreamOffer)
-            if (!tierCheck.eligible) {
-                isEligible = false
-                if (tierCheck.reason) eligibilityIssues.push(tierCheck.reason)
-            }
-
-            if (userProfile) {
-                // Check CGPA
-                if (job.minCGPA && cgpa < job.minCGPA) {
+                // Check tier eligibility first
+                const tierCheck = canApplyToTier(highestTierPlacement, job.tier, job.isDreamOffer)
+                if (!tierCheck.eligible) {
                     isEligible = false
-                    eligibilityIssues.push(`Minimum CGPA required: ${job.minCGPA} (yours: ${cgpa.toFixed(2)})`)
+                    if (tierCheck.reason) eligibilityIssues.push(tierCheck.reason)
                 }
 
-                // Check branch
-                if (job.allowedBranches.length > 0 && userProfile.branch) {
-                    if (!job.allowedBranches.includes(userProfile.branch)) {
+                if (userProfile) {
+                    // Check CGPA
+                    if (job.minCGPA && cgpa < job.minCGPA) {
                         isEligible = false
-                        eligibilityIssues.push(`Your branch (${userProfile.branch}) is not eligible`)
+                        eligibilityIssues.push(`Minimum CGPA required: ${job.minCGPA} (yours: ${cgpa.toFixed(2)})`)
+                    }
+
+                    // Check branch
+                    if (job.allowedBranches.length > 0 && userProfile.branch) {
+                        if (!job.allowedBranches.includes(userProfile.branch)) {
+                            isEligible = false
+                            eligibilityIssues.push(`Your branch (${userProfile.branch}) is not eligible`)
+                        }
+                    }
+
+                    // Check batch
+                    if (job.eligibleBatch && userProfile.batch) {
+                        const studentBatchYear = getBatchYear(userProfile.batch)
+                        const jobBatchYear = getBatchYear(job.eligibleBatch)
+
+                        if (studentBatchYear !== jobBatchYear) {
+                            isEligible = false
+                            eligibilityIssues.push(`Only ${job.eligibleBatch} batch is eligible`)
+                        }
+                    }
+
+                    // Check backlogs
+                    const hasActiveBacklogs = userProfile.activeBacklogs || userProfile.hasBacklogs === "yes"
+                    if (job.maxBacklogs !== null && job.maxBacklogs === 0 && hasActiveBacklogs) {
+                        isEligible = false
+                        eligibilityIssues.push(`No active backlogs allowed`)
                     }
                 }
 
-                // Check batch
-                if (job.eligibleBatch && userProfile.batch && userProfile.batch !== job.eligibleBatch) {
+                // Check deadline
+                if (job.deadline && new Date(job.deadline) < new Date()) {
                     isEligible = false
-                    eligibilityIssues.push(`Only ${job.eligibleBatch} batch is eligible`)
+                    eligibilityIssues.push("Application deadline has passed")
                 }
 
-                // Check backlogs
-                const hasActiveBacklogs = userProfile.activeBacklogs || userProfile.hasBacklogs === "yes"
-                if (job.maxBacklogs !== null && job.maxBacklogs === 0 && hasActiveBacklogs) {
-                    isEligible = false
-                    eligibilityIssues.push(`No active backlogs allowed`)
+                const hasApplied = applicationMap.has(job.id)
+
+                return {
+                    ...job,
+                    isEligible,
+                    eligibilityIssues,
+                    hasApplied,
+                    appliedAt: applicationMap.get(job.id) || null,
+                    hasUpdates: job.updates?.length > 0,
+                    latestUpdate: job.updates?.[0] || null
                 }
-            }
-
-            // Check deadline
-            if (job.deadline && new Date(job.deadline) < new Date()) {
-                isEligible = false
-                eligibilityIssues.push("Application deadline has passed")
-            }
-
-            const hasApplied = applicationMap.has(job.id)
-
-            return {
-                ...job,
-                isEligible,
-                eligibilityIssues,
-                hasApplied,
-                appliedAt: applicationMap.get(job.id) || null,
-                hasUpdates: job.updates.length > 0,
-                latestUpdate: job.updates[0] || null
+            } catch (err) {
+                console.error(`Error processing job ${job.id}:`, err)
+                return {
+                    ...job,
+                    isEligible: false,
+                    eligibilityIssues: ["Error processing eligibility"],
+                    hasApplied: false,
+                    appliedAt: null,
+                    hasUpdates: false,
+                    latestUpdate: null
+                }
             }
         })
 
@@ -292,10 +325,18 @@ export async function GET(request: NextRequest) {
             }
         })
 
-    } catch (error) {
-        console.error("Error fetching jobs:", error)
+    } catch (error: any) {
+        console.error("Error fetching jobs in GET handler:", error)
+        // Log stack trace if available
+        if (error.stack) {
+            console.error(error.stack)
+        }
         return NextResponse.json(
-            { error: "Internal server error" },
+            {
+                error: "Internal server error",
+                details: error.message || "Unknown error",
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            },
             { status: 500 }
         )
     }

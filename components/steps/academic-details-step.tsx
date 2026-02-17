@@ -78,8 +78,52 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isUploading, setIsUploading] = useState<Record<string, boolean>>({})
 
-  const handleInputChange = (field: string, value: string | File | null) => {
+  const uploadFile = async (file: File, type: string) => {
+    const formDataToUpload = new FormData()
+    formDataToUpload.append("file", file)
+    formDataToUpload.append("type", type)
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formDataToUpload,
+    })
+
+    if (!response.ok) {
+      throw new Error("Upload failed")
+    }
+
+    const result = await response.json()
+    return result.url
+  }
+
+  const handleFileUpload = async (field: string, file: File | null) => {
+    if (!file) {
+      handleInputChange(field, null)
+      return
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, [field]: "File size must be less than 20MB" }))
+      return
+    }
+
+    setIsUploading((prev) => ({ ...prev, [field]: true }))
+    setErrors((prev) => ({ ...prev, [field]: "" }))
+
+    try {
+      const url = await uploadFile(file, field)
+      handleInputChange(field, url)
+    } catch (error) {
+      console.error(`Upload failed for ${field}:`, error)
+      setErrors((prev) => ({ ...prev, [field]: "Failed to upload document. Please try again." }))
+    } finally {
+      setIsUploading((prev) => ({ ...prev, [field]: false }))
+    }
+  }
+
+  const handleInputChange = (field: string, value: any) => {
     setFormData((prev) => {
       const newData = { ...prev, [field]: value }
 
@@ -313,15 +357,6 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
       onNext(formData)
     }
   }
-
-  const handleFileUpload = (field: string, file: File | null) => {
-    if (file && file.size > 20 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, [field]: "File size must be less than 20MB" }))
-      return
-    }
-    handleInputChange(field, file)
-  }
-
   const generateYears = () => {
     const currentYear = new Date().getFullYear()
     return Array.from({ length: 45 }, (_, i) => (currentYear - i).toString())
@@ -372,6 +407,7 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
     "UTTARAKHAND",
     "WEST BENGAL",
   ]
+
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -535,12 +571,31 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
                   onChange={(e) => handleFileUpload("tenthMarksCard", e.target.files?.[0] || null)}
                   className={`w-full ${errors.tenthMarksCard ? "border-red-500" : ""}`}
                 />
+
+                {/* Display existing file or selected file */}
                 {formData.tenthMarksCard && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                    <Upload className="h-4 w-4" />
-                    File selected: {(formData.tenthMarksCard as File)?.name}
+                    {typeof formData.tenthMarksCard === 'string' ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-green-600 font-medium">✓ Uploaded</span>
+                        <a
+                          href={formData.tenthMarksCard}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-auto text-blue-600 hover:underline text-xs"
+                        >
+                          View Current File
+                        </a>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span>File selected: {(formData.tenthMarksCard as File)?.name}</span>
+                      </>
+                    )}
                   </div>
                 )}
+
                 {errors.tenthMarksCard && <p className="text-sm text-red-500 mt-1">{errors.tenthMarksCard}</p>}
                 <p className="text-xs text-muted-foreground mt-1">Format: USN_10th_MarksCard.jpg/pdf • Max 20MB • JPG/PNG/PDF</p>
               </div>
@@ -827,7 +882,11 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
                   label="Upload 12th Standard Marks Card"
                   required={true}
                   error={errors.twelfthMarksCard}
-                  initialFile={formData.twelfthMarksCard as File | null}
+                  initialFile={
+                    typeof formData.twelfthMarksCard === 'string'
+                      ? { url: formData.twelfthMarksCard, name: "Uploaded 12th Marks Card" }
+                      : formData.twelfthMarksCard as File | null
+                  }
                   description="• Format: USN_12th_Standard_Marks_Card.jpg/pdf<br>• Maximum file size: 20MB • JPG/PNG/PDF accepted"
                   placeholder="Drop your 12th marks card here or click to select"
                 />
@@ -1211,7 +1270,11 @@ export function AcademicDetailsStep({ onNext, onPrevious, initialData = {} }: Ac
                   label="Upload All Diploma Semester Certificates"
                   required={true}
                   error={errors.diplomaCertificates}
-                  initialFile={formData.diplomaCertificates as File | null}
+                  initialFile={
+                    typeof formData.diplomaCertificates === 'string'
+                      ? { url: formData.diplomaCertificates, name: "Uploaded Diploma Certificates" }
+                      : formData.diplomaCertificates as File | null
+                  }
                   description="• Format: USN_Diploma_All_Semester.pdf<br>• Maximum file size: 200MB • PDF only<br>• Include all semester certificates in single PDF"
                   placeholder="Drop your diploma certificates PDF here or click to select"
                 />

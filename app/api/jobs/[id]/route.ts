@@ -29,7 +29,8 @@ export async function GET(
                     select: {
                         applications: true
                     }
-                }
+                },
+                customFields: true
             }
         })
 
@@ -80,7 +81,35 @@ export async function POST(
             )
         }
 
-        const { coverLetter } = await request.json()
+        // Handle file upload (resume)
+        let resumeFile: File | null = null
+        let resumeUrl: string | null = null
+
+        const contentType = request.headers.get("content-type")
+        if (contentType?.includes("multipart/form-data")) {
+            const formData = await request.formData()
+            const file = formData.get("resume") as File | null
+            if (file) {
+                resumeFile = file
+                // Upload resume to storage
+                const uploadFormData = new FormData()
+                uploadFormData.append("file", file)
+                uploadFormData.append("folder", "application-resumes")
+
+                const uploadResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3500'}/api/upload`, {
+                    method: "POST",
+                    body: uploadFormData,
+                })
+
+                if (uploadResponse.ok) {
+                    const uploadData = await uploadResponse.json()
+                    resumeUrl = uploadData.url
+                }
+            }
+        } else {
+            const body = await request.json()
+            resumeUrl = body.resumeUrl || null
+        }
 
         // Check if job exists and is active
         const job = await prisma.job.findUnique({
@@ -133,7 +162,8 @@ export async function POST(
                 branch: true,
                 batch: true,
                 activeBacklogs: true,
-                kycStatus: true
+                kycStatus: true,
+                resumeUpload: true
             }
         })
 
@@ -144,23 +174,27 @@ export async function POST(
             )
         }
 
-        // Check KYC status
+        // Check KYC status - must be VERIFIED to apply
         if (profile.kycStatus !== "VERIFIED") {
             return NextResponse.json(
-                { error: "Your profile must be verified before applying to jobs" },
+                {
+                    error: "Your profile must be verified before applying to jobs. Please complete your profile and upload your College ID card.",
+                    kycStatus: profile.kycStatus
+                },
                 { status: 400 }
             )
         }
 
-        // Check eligibility
-        if (job.minCGPA && profile.cgpa && profile.cgpa < job.minCGPA) {
+        // Check eligibility - Optional criteria are only checked if they are set (not null) in the job
+        if (job.minCGPA !== null && profile.cgpa && profile.cgpa < job.minCGPA) {
             return NextResponse.json(
                 { error: `Minimum CGPA of ${job.minCGPA} required` },
                 { status: 400 }
             )
         }
 
-        if (job.allowedBranches.length > 0 && profile.branch) {
+        // Allowed branches: If null or empty, all branches are allowed (handled by schema change to nullable, but check here)
+        if (job.allowedBranches && job.allowedBranches.length > 0 && profile.branch) {
             if (!job.allowedBranches.includes(profile.branch)) {
                 return NextResponse.json(
                     { error: "Your branch is not eligible for this job" },
@@ -169,18 +203,27 @@ export async function POST(
             }
         }
 
-        if (job.eligibleBatch && profile.batch && profile.batch !== job.eligibleBatch) {
-            return NextResponse.json(
-                { error: `Only ${job.eligibleBatch} batch is eligible` },
-                { status: 400 }
-            )
+        if (job.eligibleBatch !== null && profile.batch) {
+            const studentBatchYear = profile.batch.split('-').pop()?.trim()
+            const jobBatchYear = job.eligibleBatch.split('-').pop()?.trim()
+
+            if (studentBatchYear !== jobBatchYear) {
+                return NextResponse.json(
+                    { error: `Only ${job.eligibleBatch} batch is eligible` },
+                    { status: 400 }
+                )
+            }
         }
 
-        if (job.maxBacklogs === 0 && profile.activeBacklogs) {
-            return NextResponse.json(
-                { error: "No active backlogs allowed for this job" },
-                { status: 400 }
-            )
+        // Max backlogs: Check if constraint is set
+        if (job.maxBacklogs !== null && profile.activeBacklogs) {
+            if (job.maxBacklogs === 0) {
+                return NextResponse.json(
+                    { error: "No active backlogs allowed for this job" },
+                    { status: 400 }
+                )
+            }
+            // For maxBacklogs > 0, we assume eligibility since we can't count them precisely
         }
 
         // Create application
@@ -188,19 +231,13 @@ export async function POST(
             data: {
                 jobId: id,
                 userId: session.user.id,
-                resumeUsed: profile.resume || null
+                resumeUsed: resumeUrl || profile.resume || profile.resumeUpload || null
             }
         })
 
-        // Generate QR code for attendance tracking
-        const qrData = JSON.stringify({
-            applicationId: application.id,
-            jobId: id,
-            userId: session.user.id,
-            timestamp: new Date().toISOString()
-        })
-
-        const qrCode = await QRCode.toDataURL(qrData)
+        // Generate QR code with Google Form URL for attendance tracking
+        const googleFormUrl = job.googleFormUrl || "https://forms.gle/placement-attendance-form"
+        const qrCode = await QRCode.toDataURL(googleFormUrl)
 
         // Create attendance record with QR code
         await prisma.attendance.create({

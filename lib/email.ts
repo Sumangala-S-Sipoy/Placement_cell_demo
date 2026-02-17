@@ -152,7 +152,7 @@ export async function sendVerificationEmail(email: string, name: string) {
   try {
     // Generate token
     const token = await generateVerificationToken(email)
-    const verificationUrl = `${process.env.NEXTAUTH_URL}/auth/verify-email?token=${token}`
+    const verificationUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`
     
     // Get production-ready transporter
     const emailTransporter = getTransporter()

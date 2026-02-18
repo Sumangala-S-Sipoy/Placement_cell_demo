@@ -56,7 +56,11 @@ export default async function Home() {
   const session = await auth()
 
   if (session?.user) {
-    redirect('/dashboard')
+    if (session.user.role === "ADMIN") {
+      redirect("/admin/dashboard")
+    } else {
+      redirect("/dashboard")
+    }
   }
 
   return (
@@ -73,13 +77,8 @@ export default async function Home() {
             </Link>
             <div className="flex items-center gap-3">
               <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Log in
-                </Button>
-              </Link>
-              <Link href="/signup">
                 <Button size="sm">
-                  Get Started
+                  Log in
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
@@ -108,15 +107,10 @@ export default async function Home() {
               track your applications, and launch your career journey with confidence.
             </p>
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
-              <Link href="/signup">
-                <Button size="lg" className="w-full sm:w-auto">
-                  Create Free Account
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
               <Link href="/login">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto">
                   Sign In
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -215,9 +209,9 @@ export default async function Home() {
               Join hundreds of students who have found their dream jobs through CampusConnect.
             </p>
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:justify-center">
-              <Link href="/signup">
+              <Link href="/login">
                 <Button size="lg" variant="secondary" className="w-full sm:w-auto">
-                  Get Started Free
+                  Get Started
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>

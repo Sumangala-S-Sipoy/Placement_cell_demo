@@ -15,6 +15,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url))
     }
 
+    // Check for role-based redirect
+    if (session.user.role === "ADMIN") {
+      return NextResponse.redirect(new URL("/admin/dashboard", request.url))
+    }
+
     // Check if user has a profile and if it's complete
     const profile = await prisma.profile.findUnique({
       where: { userId: session.user.id },

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin, sanitizeInput, logSecurityEvent } from "@/lib/auth-helpers"
+import { emitNotification } from "@/lib/socket"
+import { randomUUID } from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +26,11 @@ export async function POST(request: NextRequest) {
       isScheduled,
       scheduledDate,
       scheduledTime,
+      attachments,
       adminId
     } = await request.json()
+
+    console.log("DEBUG: Bulk notification request received:", { subject, attachmentCount: attachments?.length || 0 })
 
     // Input validation
     if (!subject || !message || !adminId) {
@@ -102,24 +107,57 @@ export async function POST(request: NextRequest) {
 
     // Create notifications for each target user
     if (targetUsers.length > 0) {
-      const notificationsData = targetUsers.map((user: { id: string; name: string | null }) => ({
-        userId: user.id,
-        title: sanitizedSubject,
-        message: sanitizedMessage,
-        type: 'SYSTEM' as const,
-        isRead: false,
-        data: {
-          sentBy: adminId,
-          targetGroup,
-          isScheduled,
-          scheduledFor: isScheduled ? `${scheduledDate}T${scheduledTime}` : null
+      const notificationsData = targetUsers.map((user: { id: string; name: string | null }) => {
+        const id = randomUUID()
+        return {
+          id,
+          userId: user.id,
+          title: sanitizedSubject,
+          message: sanitizedMessage,
+          type: 'SYSTEM' as const,
+          isRead: false,
+          scheduledAt: isScheduled ? new Date(`${scheduledDate}T${scheduledTime}`) : null,
+          data: {
+            sentBy: adminId,
+            targetGroup,
+            isScheduled,
+            scheduledFor: isScheduled ? `${scheduledDate}T${scheduledTime}` : null,
+          }
         }
-      }))
-
-      // Create all notifications in a single transaction
-      await prisma.notification.createMany({
-        data: notificationsData
       })
+
+      const filesData: any[] = []
+      notificationsData.forEach(notif => {
+        if (attachments && attachments.length > 0) {
+          attachments.forEach((file: { url: string; name: string }) => {
+            filesData.push({
+              notificationId: notif.id,
+              fileName: file.name,
+              fileUrl: file.url
+            })
+          })
+        }
+      })
+
+      // Create all notifications and their files in a transaction
+      await prisma.$transaction([
+        prisma.notification.createMany({
+          data: notificationsData
+        }),
+        prisma.notificationFile.createMany({
+          data: filesData
+        })
+      ])
+
+      // Emit real-time notifications for non-scheduled messages
+      if (!isScheduled) {
+        notificationsData.forEach((notification: any) => {
+          emitNotification(notification.userId, {
+            ...notification,
+            createdAt: new Date().toISOString()
+          })
+        })
+      }
 
       console.log(`Bulk notification sent to ${targetUsers.length} users`)
     }

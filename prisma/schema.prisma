@@ -330,7 +330,7 @@ model Job {
   allowedBranches String[]      @map("allowed_branches")
   eligibleBatch   String?       @map("eligible_batch")
   maxBacklogs     Int?          @map("max_backlogs")
-  salary          String?
+  salary          Float?
   minSalary       Float?        @map("min_salary")
   maxSalary       Float?        @map("max_salary")
   requiredSkills  String[]      @default([]) @map("required_skills")
@@ -380,13 +380,27 @@ model Notification {
   message   String
   type      NotificationType
   isRead    Boolean          @default(false) @map("is_read")
-  data      Json?
-  createdAt DateTime         @default(now()) @map("created_at")
-  readAt    DateTime?        @map("read_at")
-  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  data        Json?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  scheduledAt DateTime?        @map("scheduled_at")
+  readAt      DateTime?        @map("read_at")
+  user        User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  files       NotificationFile[]
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+model NotificationFile {
+  id             String       @id @default(cuid())
+  notificationId String       @map("notification_id")
+  fileName       String       @map("file_name")
+  fileUrl        String       @map("file_url")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@map("notification_files")
 }
 
 model Attendance {

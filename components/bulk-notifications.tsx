@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -16,15 +16,17 @@ import {
   SelectValue
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { 
-  Mail, 
-  Users, 
-  Send, 
+import {
+  Mail,
+  Users,
+  Send,
   Filter,
   UserCheck,
   GraduationCap,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  X,
+  Plus
 } from "lucide-react"
 
 interface BranchStats {
@@ -54,6 +56,8 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
   const [isScheduled, setIsScheduled] = useState(false)
   const [scheduledDate, setScheduledDate] = useState("")
   const [scheduledTime, setScheduledTime] = useState("")
+  const [attachments, setAttachments] = useState<{ url: string; name: string }[]>([])
+  const [isUploading, setIsUploading] = useState(false)
   const [isSending, setIsSending] = useState(false)
 
   const handleBranchChange = (branch: string, checked: boolean) => {
@@ -64,9 +68,43 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
     }
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("type", "academic-document") // Generic type for all attachments
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        setAttachments(prev => [...prev, { url: data.url, name: file.name }])
+        alert("File successfully uploaded")
+      } else {
+        alert(data.error || "Failed to upload file")
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      alert("An error occurred during upload")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
   const getEstimatedRecipients = () => {
     let count = 0
-    
+
     if (targetGroup === "all") {
       count = verifiedOnly ? stats.verifiedStudents : stats.totalStudents
     } else if (targetGroup === "verified") {
@@ -76,7 +114,7 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
         .filter(b => b.branch && selectedBranches.includes(b.branch))
         .reduce((acc, b) => acc + b._count.branch, 0)
     }
-    
+
     return count
   }
 
@@ -86,7 +124,7 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
     }
 
     setIsSending(true)
-    
+
     try {
       const response = await fetch('/api/admin/bulk-notifications', {
         method: 'POST',
@@ -102,6 +140,7 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
           isScheduled,
           scheduledDate: isScheduled ? scheduledDate : null,
           scheduledTime: isScheduled ? scheduledTime : null,
+          attachments,
           adminId
         }),
       })
@@ -116,7 +155,8 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
         setIsScheduled(false)
         setScheduledDate("")
         setScheduledTime("")
-        
+        setAttachments([])
+
         alert("Notification sent successfully!")
       }
     } catch (error) {
@@ -161,6 +201,57 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
                 onChange={(e) => setMessage(e.target.value)}
                 className="min-h-[150px]"
               />
+            </div>
+
+            {/* Simple Attach Files Section */}
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label>Attach Files (JPG, PNG, PDF, Word, Excel, CSV)</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 border-dashed"
+                    onClick={() => document.getElementById('file-upload')?.click()}
+                    disabled={isUploading}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {isUploading ? "Uploading..." : "Attach File"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Preview Area for Attachments */}
+              {attachments.length > 0 && (
+                <div className="space-y-2 p-3 border rounded-lg bg-muted/30 text-sm">
+                  <p className="text-xs font-semibold">Selected Files ({attachments.length}):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {attachments.map((file, i) => (
+                      <Badge key={i} variant="secondary" className="gap-2 px-3 py-1.5 pr-2 hover:bg-muted transition-colors">
+                        <span className="max-w-[150px] truncate font-medium">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 rounded-full hover:bg-destructive hover:text-white"
+                          onClick={() => removeAttachment(i)}
+                          title="Remove file"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <Separator />
@@ -215,7 +306,7 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
                   This will send to approximately {getEstimatedRecipients()} recipients
                 </p>
               </div>
-              <Button 
+              <Button
                 onClick={handleSendNotification}
                 disabled={!subject.trim() || !message.trim() || isSending}
                 className="gap-2"
@@ -264,11 +355,11 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
                       <Checkbox
                         id={branch.branch || "unknown"}
                         checked={selectedBranches.includes(branch.branch || "")}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           handleBranchChange(branch.branch || "", checked as boolean)
                         }
                       />
-                      <Label 
+                      <Label
                         htmlFor={branch.branch || "unknown"}
                         className="flex-1 flex items-center justify-between"
                       >
@@ -356,7 +447,7 @@ export function BulkNotifications({ stats, adminId }: BulkNotificationsProps) {
                   Important Notice
                 </p>
                 <p className="text-xs text-orange-700 mt-1">
-                  Bulk notifications will be sent via email and in-app notifications. 
+                  Bulk notifications will be sent via in-app notifications.
                   Please review your message carefully before sending.
                 </p>
               </div>

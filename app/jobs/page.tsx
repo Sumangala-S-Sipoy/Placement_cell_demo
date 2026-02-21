@@ -33,7 +33,7 @@ interface Job {
   location: string
   jobType: string
   workMode: string
-  salary: number
+  salary?: string
   tier: string
   category: string
   isDreamOffer: boolean
@@ -268,9 +268,9 @@ export default function JobsPage() {
                         <Building2 className="w-4 h-4" />
                         {getWorkModeLabel(job.workMode)}
                       </span>
-                      <span className="flex items-center gap-1 font-medium text-green-600">
+                      {job.salary && <span className="flex items-center gap-1 font-medium text-green-600">
                         ₹{job.salary} LPA
-                      </span>
+                      </span>}
                       {job.noOfPositions && (
                         <span className="flex items-center gap-1">
                           <Users className="w-4 h-4" />

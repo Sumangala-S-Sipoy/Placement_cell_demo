@@ -38,7 +38,13 @@ export async function POST(request: NextRequest) {
     // Validate file type based on upload type
     const allowedTypes: Record<string, string[]> = {
       "profile-photo": ["image/jpeg", "image/png", "image/webp"],
-      "resume": ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+      "resume": [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      ],
       "college-id-card": ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
       "tenthMarksCard": ["application/pdf", "image/jpeg", "image/png"],
       "twelfthMarksCard": ["application/pdf", "image/jpeg", "image/png"],
@@ -50,12 +56,22 @@ export async function POST(request: NextRequest) {
       "passport": ["application/pdf", "image/jpeg", "image/png"],
       "aadharCard": ["application/pdf", "image/jpeg", "image/png"],
       "panCard": ["application/pdf", "image/jpeg", "image/png"],
-      "academic-document": ["application/pdf", "image/jpeg", "image/png"],
+      "academic-document": [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv"
+      ],
+      "company-logo": ["image/jpeg", "image/png", "application/pdf"],
     }
 
     if (!allowedTypes[type]?.includes(file.type)) {
       return NextResponse.json(
-        { error: `Invalid file type for ${type}. Allowed: ${allowedTypes[type]?.join(", ")}` },
+        { error: `Invalid file type for ${type}. Allowed: image/pdf/excel/word/csv` },
         { status: 400 }
       )
     }

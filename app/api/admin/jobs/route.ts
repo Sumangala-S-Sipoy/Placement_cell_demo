@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin, sanitizeInput, logSecurityEvent } from "@/lib/auth-helpers"
+import { emitNotification } from "@/lib/socket"
 
 // Helper to determine tier from salary
 function determineTier(salary: number | null, isDreamOffer: boolean): string {
@@ -12,7 +13,7 @@ function determineTier(salary: number | null, isDreamOffer: boolean): string {
 }
 
 // Helper to notify eligible students about new job
-async function notifyEligibleStudents(jobId: string, jobTitle: string, companyName: string, allowedBranches: string[] | null) {
+async function notifyEligibleStudents(jobId: string, jobTitle: string, companyName: string, allowedBranches: string[] | null, salary: number | null) {
     try {
         // Get eligible students (with verified KYC and matching branch)
         // If allowedBranches is null or empty, it means ALL branches are allowed
@@ -20,28 +21,53 @@ async function notifyEligibleStudents(jobId: string, jobTitle: string, companyNa
             ? { branch: { in: allowedBranches as any } }
             : {}
 
-        const eligibleProfiles = await prisma.profile.findMany({
+        const eligibleUsers = await prisma.user.findMany({
             where: {
-                kycStatus: "VERIFIED",
-                ...branchFilter
+                role: "STUDENT",
             },
-            select: { userId: true }
+            select: { id: true }
         })
 
-        if (eligibleProfiles.length > 0) {
+        console.log(`DEBUG: Found ${eligibleUsers.length} eligible students for job ${jobTitle}.`)
+        if (eligibleUsers.length > 0) {
+            console.log("DEBUG: Sample eligible userId:", eligibleUsers[0].id)
+        }
+
+        if (eligibleUsers.length > 0) {
+            // Get company logo for notifications
+            const jobWithLogo = await prisma.job.findUnique({
+                where: { id: jobId },
+                select: { companyLogo: true }
+            })
+            const companyLogo = jobWithLogo?.companyLogo || null
+
             // Create notifications for all eligible students
+            const notificationData = eligibleUsers.map((user: { id: string }) => ({
+                userId: user.id,
+                title: `New Job: ${jobTitle}`,
+                message: `${companyName} is hiring! Check out the new job posting and apply before the deadline.`,
+                type: "JOB_POSTED" as const,
+                data: {
+                    jobId,
+                    salary: salary ? `${salary} LPA` : "Not Disclosed",
+                    eligibility: allowedBranches && allowedBranches.length > 0 ? allowedBranches.join(", ") : "All Branches",
+                    companyName,
+                    jobTitle,
+                    companyLogo
+                }
+            }))
+
             await prisma.notification.createMany({
-                data: eligibleProfiles.map((profile: { userId: string }) => ({
-                    userId: profile.userId,
-                    title: `New Job: ${jobTitle}`,
-                    message: `${companyName} is hiring! Check out the new job posting and apply before the deadline.`,
-                    type: "JOB_POSTED" as const,
-                    data: { jobId }
-                }))
+                data: notificationData
+            })
+
+            // Emit socket events for each notification
+            notificationData.forEach((notification: any) => {
+                emitNotification(notification.userId, notification)
             })
         }
 
-        return eligibleProfiles.length
+        return eligibleUsers.length
     } catch (error) {
         console.error("Error notifying students:", error)
         return 0
@@ -169,9 +195,10 @@ export async function POST(request: NextRequest) {
             allowedBranches: data.allowedBranches || [],
             eligibleBatch: data.eligibleBatch ? sanitizeInput(data.eligibleBatch) : null,
             maxBacklogs: (data.maxBacklogs !== undefined && data.maxBacklogs !== null) ? parseInt(data.maxBacklogs) : null,
-            salary: data.salary ? sanitizeInput(data.salary) : null,
+            salary: data.salary ? Math.round(parseFloat(data.salary.toString().replace(/[^0-9.]/g, '')) || 0) : null,
             minSalary: data.minSalary ? parseFloat(data.minSalary) : null,
             maxSalary: maxSalary,
+            companyLogo: data.companyLogo || null,
             deadline: data.deadline ? new Date(data.deadline) : null,
             startDate: data.startDate ? new Date(data.startDate) : null,
             noOfPositions: data.noOfPositions ? parseInt(data.noOfPositions) : 1,
@@ -199,7 +226,8 @@ export async function POST(request: NextRequest) {
                 job.id,
                 job.title,
                 job.companyName,
-                job.allowedBranches
+                job.allowedBranches,
+                job.salary
             )
         }
 
@@ -278,9 +306,10 @@ export async function PUT(request: NextRequest) {
         if (updateData.allowedBranches !== undefined) sanitizedData.allowedBranches = updateData.allowedBranches || []
         if (updateData.eligibleBatch !== undefined) sanitizedData.eligibleBatch = updateData.eligibleBatch ? sanitizeInput(updateData.eligibleBatch) : null
         if (updateData.maxBacklogs !== undefined) sanitizedData.maxBacklogs = (updateData.maxBacklogs !== null) ? parseInt(updateData.maxBacklogs) : null
-        if (updateData.salary !== undefined) sanitizedData.salary = updateData.salary ? sanitizeInput(updateData.salary) : null
+        if (updateData.salary !== undefined) sanitizedData.salary = updateData.salary ? Math.round(parseFloat(updateData.salary.toString().replace(/[^0-9.]/g, '')) || 0) : null
         if (updateData.minSalary !== undefined) sanitizedData.minSalary = updateData.minSalary ? parseFloat(updateData.minSalary) : null
         if (updateData.maxSalary !== undefined) sanitizedData.maxSalary = updateData.maxSalary ? parseFloat(updateData.maxSalary) : null
+        if (updateData.companyLogo !== undefined) sanitizedData.companyLogo = updateData.companyLogo
         if (updateData.deadline !== undefined) sanitizedData.deadline = updateData.deadline ? new Date(updateData.deadline) : null
         if (updateData.startDate !== undefined) sanitizedData.startDate = updateData.startDate ? new Date(updateData.startDate) : null
         if (updateData.noOfPositions !== undefined) sanitizedData.noOfPositions = parseInt(updateData.noOfPositions)

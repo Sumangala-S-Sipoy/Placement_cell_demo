@@ -16,12 +16,14 @@ import {
 import { RichTextEditor } from "@/components/rich-text-editor"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { X, Plus, Trash2 } from "lucide-react"
+import { X, Plus, Trash2, Upload, FileIcon } from "lucide-react"
+import { toast } from "sonner"
 
 interface JobFormData {
     id?: string
     title: string
     companyName: string
+    companyLogo?: string
     description: string
     location: string
     jobType: string
@@ -29,7 +31,7 @@ interface JobFormData {
     tier: string
     category: string
     isDreamOffer: boolean
-    salary: number
+    salary: string
     minCGPA?: number | null
     allowedBranches?: string[] | null
     eligibleBatch?: string | null
@@ -79,6 +81,7 @@ export function JobForm({ initialData, onSubmit, isLoading = false }: JobFormPro
     const [formData, setFormData] = useState<JobFormData>({
         title: initialData?.title || "",
         companyName: initialData?.companyName || "",
+        companyLogo: initialData?.companyLogo || "",
         description: initialData?.description || "",
         location: initialData?.location || "",
         jobType: initialData?.jobType || "FULL_TIME",
@@ -86,7 +89,7 @@ export function JobForm({ initialData, onSubmit, isLoading = false }: JobFormPro
         tier: initialData?.tier || "TIER_3",
         category: initialData?.category || "FTE",
         isDreamOffer: initialData?.isDreamOffer || false,
-        salary: initialData?.salary || 0,
+        salary: initialData?.salary?.toString() || "",
         minCGPA: initialData?.minCGPA,
         allowedBranches: initialData?.allowedBranches || [],
         eligibleBatch: initialData?.eligibleBatch || "",
@@ -138,6 +141,37 @@ export function JobForm({ initialData, onSubmit, isLoading = false }: JobFormPro
         setFormData(prev => ({ ...prev, customFields: fields }))
     }
 
+    const [isUploading, setIsUploading] = useState(false)
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setIsUploading(true)
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("type", "company-logo")
+
+        try {
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: formData
+            })
+
+            const data = await res.json()
+            if (data.success) {
+                setFormData(prev => ({ ...prev, companyLogo: data.url }))
+                toast.success("Logo uploaded successfully")
+            } else {
+                toast.error(data.error || "Failed to upload logo")
+            }
+        } catch (error) {
+            console.error("Error uploading logo:", error)
+            toast.error("An error occurred during upload")
+        } finally {
+            setIsUploading(false)
+        }
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -198,6 +232,55 @@ export function JobForm({ initialData, onSubmit, isLoading = false }: JobFormPro
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="companyLogo">Company Logo (JPG/PDF) *</Label>
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border bg-muted">
+                                    {formData.companyLogo ? (
+                                        formData.companyLogo.toLowerCase().endsWith('.pdf') ? (
+                                            <div className="flex flex-col items-center">
+                                                <FileIcon className="h-8 w-8 text-primary" />
+                                                <span className="text-[10px] font-medium">PDF</span>
+                                            </div>
+                                        ) : (
+                                            <img
+                                                src={formData.companyLogo}
+                                                alt="Preview"
+                                                className="h-full w-full rounded-lg object-contain"
+                                            />
+                                        )
+                                    ) : (
+                                        <Upload className="h-8 w-8 text-muted-foreground" />
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <Input
+                                        id="companyLogo"
+                                        type="file"
+                                        accept="image/jpeg,image/png,application/pdf"
+                                        onChange={handleLogoUpload}
+                                        disabled={isUploading}
+                                        className="cursor-pointer"
+                                    />
+                                    {formData.companyLogo && (
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                                {formData.companyLogo}
+                                            </p>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 w-6 text-destructive"
+                                                onClick={() => setFormData(prev => ({ ...prev, companyLogo: "" }))}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="location">Location *</Label>
                             <Input
@@ -400,16 +483,13 @@ export function JobForm({ initialData, onSubmit, isLoading = false }: JobFormPro
                             <Label htmlFor="salary">Salary (LPA) *</Label>
                             <Input
                                 id="salary"
-                                type="number"
-                                step="0.1"
-                                min="0"
                                 required
                                 placeholder="e.g., 8.5"
-                                value={formData.salary || ""}
-                                onChange={e => setFormData(prev => ({ ...prev, salary: e.target.value ? parseFloat(e.target.value) : 0 }))}
+                                value={formData.salary}
+                                onChange={e => setFormData(prev => ({ ...prev, salary: e.target.value }))}
                             />
                             <p className="text-xs text-muted-foreground">
-                                Tier auto-calculated: ≤5 LPA = Tier 3, 5-9 LPA = Tier 2, &gt;9 LPA = Tier 1
+                                Enter the salary package (e.g., 10 or 10 LPA).
                             </p>
                         </div>
                         <div className="space-y-2">

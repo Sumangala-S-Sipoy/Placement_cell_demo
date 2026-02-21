@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Bell, Check, CheckCheck, Trash2, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +28,7 @@ import {
 import { formatDistanceToNow, format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { BulkNotificationView } from "@/components/notifications/bulk-notification-view"
 
 interface Notification {
     id: string
@@ -56,6 +58,7 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
     const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
     const [filter, setFilter] = useState<string>("all")
     const [tab, setTab] = useState<string>("all")
+    const router = useRouter()
 
     const filteredNotifications = notifications.filter(n => {
         const matchesFilter = filter === "all" || n.type === filter
@@ -133,6 +136,29 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
 
     const getTypeInfo = (type: string) => {
         return TYPE_INFO[type] || TYPE_INFO.SYSTEM
+    }
+
+    // Types that have a jobId for click-through navigation
+    const JOB_NOTIFICATION_TYPES = ["JOB_POSTED", "JOB_UPDATED", "JOB_DEADLINE_REMINDER", "JOB_DEADLINE_EXTENDED"]
+
+    const handleNotificationClick = async (notification: Notification) => {
+        // Mark as read if unread
+        if (!notification.isRead) {
+            await markAsRead([notification.id])
+        }
+
+        const jobId = notification.data?.jobId as string | undefined
+        const isJobNotification = JOB_NOTIFICATION_TYPES.includes(notification.type) && !!jobId
+
+        if (isJobNotification) {
+            router.push(`/jobs/${jobId}`)
+        } else {
+            router.push(`/notifications/${notification.id}`)
+        }
+    }
+
+    const isClickable = (notification: Notification) => {
+        return true
     }
 
     return (
@@ -242,16 +268,31 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
                                             return (
                                                 <div
                                                     key={notification.id}
+                                                    onClick={() => handleNotificationClick(notification)}
                                                     className={cn(
-                                                        "group relative flex gap-4 p-4 rounded-lg border transition-colors hover:bg-muted/50",
-                                                        !notification.isRead && "bg-primary/5 border-primary/20"
+                                                        "group relative flex gap-4 p-5 rounded-xl border shadow-sm transition-all hover:shadow-md hover:bg-muted/30 mb-3",
+                                                        !notification.isRead && "bg-primary/5 border-primary/20 ring-1 ring-primary/5",
+                                                        isClickable(notification) && "cursor-pointer"
                                                     )}
                                                 >
-                                                    <div className={cn(
-                                                        "flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-lg",
-                                                        typeInfo.color
-                                                    )}>
-                                                        {typeInfo.icon}
+                                                    {/* Unread dot on the left */}
+                                                    {!notification.isRead && (
+                                                        <div className="flex shrink-0 items-center justify-center pt-5">
+                                                            <div className="h-2 w-2 rounded-full bg-primary" />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Company Logo or Initial - Made rounded-full */}
+                                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border bg-muted font-bold text-muted-foreground uppercase text-lg shadow-sm overflow-hidden">
+                                                        {notification.data?.companyLogo ? (
+                                                            <img
+                                                                src={notification.data.companyLogo as string}
+                                                                alt={notification.data.companyName as string}
+                                                                className="h-full w-full object-contain p-1"
+                                                            />
+                                                        ) : (
+                                                            <span>{(notification.data?.companyName as string || notification.title || "?").charAt(0)}</span>
+                                                        )}
                                                     </div>
 
                                                     <div className="flex-1 min-w-0">
@@ -261,13 +302,23 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
                                                                     "text-sm",
                                                                     !notification.isRead && "font-semibold"
                                                                 )}>
-                                                                    {notification.title}
+                                                                    {notification.type === "JOB_POSTED" && notification.data?.jobTitle ? (
+                                                                        <span className="flex flex-col gap-1">
+                                                                            <span className="font-semibold text-base">
+                                                                                {notification.data.jobTitle as string} | {notification.data.companyName as string}
+                                                                            </span>
+                                                                            <span className="text-sm font-normal text-muted-foreground">
+                                                                                Package: {notification.data.salary as string} | Eligibility: {notification.data.eligibility as string}
+                                                                            </span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        notification.title
+                                                                    )}
                                                                 </h4>
-                                                                <Badge variant="outline" className="text-xs">
-                                                                    {typeInfo.label}
-                                                                </Badge>
-                                                                {!notification.isRead && (
-                                                                    <div className="h-2 w-2 rounded-full bg-primary" />
+                                                                {notification.type !== "JOB_POSTED" && (
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {typeInfo.label}
+                                                                    </Badge>
                                                                 )}
                                                             </div>
 
@@ -293,9 +344,17 @@ export function NotificationsClient({ initialNotifications }: NotificationsClien
                                                             </div>
                                                         </div>
 
-                                                        <p className="text-sm text-muted-foreground mt-1">
-                                                            {notification.message}
-                                                        </p>
+                                                        <div className="text-sm text-foreground/70 mt-1">
+                                                            {notification.message.length > 150
+                                                                ? (
+                                                                    <>
+                                                                        {notification.message.substring(0, 150)}...
+                                                                        <span className="text-primary font-medium ml-1">Read More</span>
+                                                                    </>
+                                                                )
+                                                                : notification.message
+                                                            }
+                                                        </div>
 
                                                         <div className="flex items-center gap-4 mt-2">
                                                             <p className="text-xs text-muted-foreground">

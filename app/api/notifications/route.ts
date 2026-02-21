@@ -11,30 +11,46 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
+        const loggedInUserId = session.user.id
+
+        const userProfile = await prisma.profile.findUnique({
+            where: { userId: loggedInUserId }
+        })
+
         const { searchParams } = new URL(req.url)
         const unreadOnly = searchParams.get("unread") === "true"
         const limit = parseInt(searchParams.get("limit") || "20")
 
         const notifications = await prisma.notification.findMany({
             where: {
-                userId: session.user.id,
-                ...(unreadOnly && { isRead: false })
+                userId: loggedInUserId,
+                ...(unreadOnly && { isRead: false }),
+                OR: [
+                    { scheduledAt: null },
+                    { scheduledAt: { lte: new Date() } }
+                ]
             },
             orderBy: { createdAt: "desc" },
             take: limit
         })
 
+
         // Get unread count
         const unreadCount = await prisma.notification.count({
             where: {
                 userId: session.user.id,
-                isRead: false
+                isRead: false,
+                OR: [
+                    { scheduledAt: null },
+                    { scheduledAt: { lte: new Date() } }
+                ]
             }
         })
 
         return NextResponse.json({
             notifications,
-            unreadCount
+            unreadCount,
+            userId: loggedInUserId,
         })
     } catch (error) {
         console.error("Error fetching notifications:", error)

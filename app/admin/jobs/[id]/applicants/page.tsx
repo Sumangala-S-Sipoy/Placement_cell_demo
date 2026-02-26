@@ -80,13 +80,13 @@ export default async function JobApplicantsPage({ params }: { params: Promise<{ 
                                     email: true,
                                     resume: true,
                                 }
-                            },
-                            responses: {
-                                include: {
-                                    field: {
-                                        select: { label: true }
-                                    }
-                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        include: {
+                            field: {
+                                select: { label: true }
                             }
                         }
                     }

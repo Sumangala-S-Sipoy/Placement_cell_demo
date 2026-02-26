@@ -264,22 +264,7 @@ export default function JobDetailPage() {
                 </Button>
             </Link>
 
-            {/* KYC Verification Banner */}
-            {profile && profile.kycStatus !== 'VERIFIED' && (
-                <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
-                    <AlertDescription className="flex items-center justify-between">
-                        <span className="text-yellow-800 dark:text-yellow-300">
-                            ⚠️ Complete your profile and upload College ID to apply for jobs
-                        </span>
-                        <Link href="/profile">
-                            <Button size="sm" variant="outline">
-                                Complete Profile
-                            </Button>
-                        </Link>
-                    </AlertDescription>
-                </Alert>
-            )}
+
 
             {/* Job Header */}
             <Card>

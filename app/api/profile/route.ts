@@ -147,19 +147,20 @@ export async function PUT(request: NextRequest) {
     const hasCollegeId = !!(sanitizedData.collegeIdCard || mergedData.collegeIdCard || existingProfile?.collegeIdCard)
 
     if (!isAdminSetStatus) {
-      // If College ID is uploaded and profile is complete, mark as VERIFIED
-      if (hasCollegeId && isProfileComplete(mergedData)) {
-        // Only update to VERIFIED if not already VERIFIED
-        kycStatusUpdate.kycStatus = 'VERIFIED'
-      }
-      // If profile is complete (without College ID), move to UNDER_REVIEW
-      else if (isProfileComplete(mergedData)) {
-        if (currentKycStatus === 'PENDING' || currentKycStatus === 'INCOMPLETE') {
+      // Users cannot directly mark profiles as VERIFIED/REJECTED. Instead,
+      // once all required fields are filled in we move the status to
+      // UNDER_REVIEW. An admin must then explicitly approve to flip to
+      // VERIFIED.
+      if (isProfileComplete(mergedData)) {
+        if (currentKycStatus !== 'UNDER_REVIEW') {
           kycStatusUpdate.kycStatus = 'UNDER_REVIEW'
         }
-      } else if (currentKycStatus === 'UNDER_REVIEW') {
-        // If profile becomes incomplete while UNDER_REVIEW, revert to PENDING
-        kycStatusUpdate.kycStatus = 'PENDING'
+      } else {
+        // If the profile was previously under review but becomes incomplete,
+        // revert back to pending so the student can fix issues.
+        if (currentKycStatus === 'UNDER_REVIEW') {
+          kycStatusUpdate.kycStatus = 'PENDING'
+        }
       }
     }
 

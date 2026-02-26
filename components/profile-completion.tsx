@@ -136,6 +136,8 @@ export function ProfileCompletion({ profile, userEmail }: { profile: any, userEm
         await saveProfile(data, true)
     }
 
+    const kycStatus = profile?.kycStatus
+
     const saveProfile = async (data: any = null, advanceStep = false) => {
         setIsSaving(true)
         try {
@@ -271,6 +273,49 @@ export function ProfileCompletion({ profile, userEmail }: { profile: any, userEm
 
     const handlePrevious = () => {
         setCurrentStep((prev) => Math.max(1, prev - 1))
+    }
+
+    // Banner messages based on current KYC status
+    const renderKycBanner = () => {
+        if (kycStatus === 'UNDER_REVIEW') {
+            return (
+                <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 mb-4">
+                    <CardContent className="py-4">
+                        <div className="flex items-start gap-3">
+                            <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                            <div>
+                                <h3 className="font-semibold text-blue-900 dark:text-blue-200">
+                                    KYC Verification Pending
+                                </h3>
+                                <p className="text-sm text-blue-800 dark:text-blue-300 mt-1">
+                                    Your profile has been submitted and is awaiting admin approval. You will be notified once verified.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )
+        }
+        if (kycStatus === 'VERIFIED') {
+            return (
+                <Card className="border-green-200 bg-green-50 dark:bg-green-950/20 mb-4">
+                    <CardContent className="py-4">
+                        <div className="flex items-start gap-3">
+                            <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                            <div>
+                                <h3 className="font-semibold text-green-900 dark:text-green-200">
+                                    KYC Verified
+                                </h3>
+                                <p className="text-sm text-green-800 dark:text-green-300 mt-1">
+                                    Your profile has been approved by an admin. You may now browse and apply for jobs.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )
+        }
+        return null
     }
 
     const renderStep = () => {

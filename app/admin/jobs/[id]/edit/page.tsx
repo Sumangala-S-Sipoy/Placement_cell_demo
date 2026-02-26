@@ -9,14 +9,17 @@ import { Skeleton } from "@/components/ui/skeleton"
 export default function EditJobPage() {
     const router = useRouter()
     const params = useParams()
+    const jobId = params?.id as string
     const [isLoading, setIsLoading] = useState(false)
     const [isFetching, setIsFetching] = useState(true)
     const [jobData, setJobData] = useState<any>(null)
 
     useEffect(() => {
+        if (!jobId) return;
+
         const fetchJob = async () => {
             try {
-                const response = await fetch(`/api/admin/jobs/${params.id}`)
+                const response = await fetch(`/api/admin/jobs/${jobId}`)
                 if (response.ok) {
                     const data = await response.json()
                     // Format dates for form inputs
@@ -40,9 +43,10 @@ export default function EditJobPage() {
         }
 
         fetchJob()
-    }, [params.id, router])
+    }, [jobId, router])
 
     const handleSubmit = async (data: any) => {
+        if (!jobId) return;
         setIsLoading(true)
         try {
             const response = await fetch('/api/admin/jobs', {
@@ -50,7 +54,7 @@ export default function EditJobPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ id: params.id, ...data }),
+                body: JSON.stringify({ id: jobId, ...data }),
             })
 
             if (response.ok) {

@@ -169,7 +169,9 @@ export function ReviewStep({ onPrevious, formData }: ReviewStepProps) {
 
         // Completion flags
         isComplete: true,
-        kycStatus: "PENDING",
+        // kycStatus is intentionally not set here; server will evaluate and
+        // move the profile to 'UNDER_REVIEW' if eligible. Admin approval
+        // is required for 'VERIFIED'.
         completionStep: 6,
       }
 
@@ -192,9 +194,9 @@ export function ReviewStep({ onPrevious, formData }: ReviewStepProps) {
         throw new Error(errorData.error || "Failed to submit profile")
       }
 
-      toast.success("Profile submitted successfully! Your KYC verification is pending.", {
+      toast.success("Profile submitted successfully! Your KYC verification is pending with the admin.", {
         duration: 5000,
-        description: "Please visit the Placement Cell with your documents."
+        description: "An administrator will review your information shortly."
       })
 
       // Redirect to dashboard after 2 seconds
